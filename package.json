@@ -1,6 +1,6 @@
 {
   "name": "locon",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "description": "locon is a simple and lightweight library for React and React Native that provides a simple way to manage translations in your app.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
