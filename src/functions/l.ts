@@ -1,5 +1,11 @@
+import { getAsset } from '../settings'
+
 function l(assetKey: string): string {
-  return assetKey
+  if (!assetKey) {
+    return ''
+  }
+  const asset = getAsset(assetKey)
+  return asset ?? assetKey
 }
 
 export default l

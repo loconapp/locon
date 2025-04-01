@@ -1,5 +1,6 @@
 import L from './components/L'
 import l from './functions/l'
-import { init } from './settings'
+import { init, setLocale } from './settings'
 
-export default { L, init, l }
+export { L, l, setLocale }
+export default { init, setLocale }

@@ -14,9 +14,10 @@ declare global {
   }
 }
 
-const defaultSettings = {
+const defaultSettings: Settings = {
+  assets: { en: {} },
+  currentLocale: 'en',
   defaultLocale: 'en',
-  locales: { en: {} },
   autodetect: true,
 }
 
@@ -24,7 +25,7 @@ const defaultSettings = {
 let globalSettings = defaultSettings
 
 // Initialize settings with defaults and custom options
-const init = (options = {}) => {
+function init(options = {}) {
   // Merge defaults with custom options
   globalSettings = { ...defaultSettings, ...options }
 
@@ -41,7 +42,7 @@ const init = (options = {}) => {
 }
 
 // Get settings
-const getSettings = () => {
+function getSettings() {
   if (isBrowser) {
     return window.__LOCON_SETTINGS__ || globalSettings
   } else {
@@ -49,4 +50,27 @@ const getSettings = () => {
   }
 }
 
-export { getSettings, init }
+function getAssets() {
+  const settings = getSettings()
+  const { currentLocale, defaultLocale } = settings
+  const assets = settings.assets[currentLocale] ?? settings.assets[defaultLocale]
+
+  return assets ?? {}
+}
+
+function getAsset(assetKey: string): string {
+  const assets = getAssets()
+
+  return assets[assetKey] ?? ''
+}
+
+function setLocale(locale: string) {
+  if (!locale) {
+    return
+  }
+  const settings = getSettings()
+  settings.currentLocale = locale
+  init(settings)
+}
+
+export { getAsset, getAssets, getSettings, init, setLocale }

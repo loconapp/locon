@@ -1,8 +1,9 @@
-import type Locales from './Locales'
+import type Assets from './Assets'
 
 interface Settings {
+  assets: Assets
+  currentLocale: string
   defaultLocale: string
-  locales: Locales
   autodetect: boolean
 }
 
