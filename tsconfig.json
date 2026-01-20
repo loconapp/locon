@@ -1,21 +1,22 @@
 {
-  "exclude": ["node_modules", "dist"],
+  "exclude": ["node_modules", "dist", "src/index.ts"],
   "include": ["src/**/*.tsx", "src/**/*.ts"],
   "compilerOptions": {
     "declaration": true,
     "declarationDir": "./dist",
     "skipLibCheck": true,
-    "jsx": "react",
+    "jsx": "react-jsx",
     "lib": ["esnext", "dom"],
-    "module": "esnext",
+    "module": "NodeNext",
     "target": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "NodeNext",
     "noUnusedParameters": true,
     "isolatedModules": true,
     "esModuleInterop": true,
     "noImplicitAny": true,
     "outDir": "./dist",
     "strict": true,
+    "strictPropertyInitialization": false,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true
   }
