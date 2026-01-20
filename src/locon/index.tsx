@@ -1,5 +1,6 @@
 import { createContext, PropsWithChildren, ReactElement, useCallback, useMemo, useState } from 'react'
 import LoconContextType from './types/LoconContext'
+import getSystemLanguage from './utils/getSystemLanguage'
 
 const LoconContext = createContext<LoconContextType>({
   assets: {},
@@ -21,12 +22,27 @@ interface Props extends PropsWithChildren {
 function Locon({
   children,
   assets = {},
-  currentLocale: currentLocaleProps = 'en',
+  currentLocale: currentLocaleProps,
   defaultLocale = 'en',
   projectLocale = 'en',
   autodetect = true,
 }: Props): ReactElement {
-  const [currentLocale, setCurrentLocale] = useState<string>(currentLocaleProps)
+  // Determine initial locale: use provided currentLocale, or auto-detect if autodetect is enabled
+  const [currentLocale, setCurrentLocale] = useState<string>(() => {
+    if (currentLocaleProps) {
+      return currentLocaleProps
+    }
+    
+    if (autodetect) {
+      const availableLocales = Object.keys(assets)
+      const systemLang = getSystemLanguage(availableLocales)
+      if (systemLang && assets[systemLang]) {
+        return systemLang
+      }
+    }
+    
+    return defaultLocale
+  })
 
   const getAssets = useCallback(() => {
     const currentAssets = assets[currentLocale] ?? assets[defaultLocale]
