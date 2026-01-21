@@ -80,7 +80,7 @@ function App() {
     <Locon
       assets={{ en, de }}
       defaultLocale='en'
-      projectLocale='en'
+      projectLocale='de'
       autodetect
     >
       <NavigationContainer theme={theme}>
@@ -113,10 +113,14 @@ function LanguageSwitcher() {
 
   return (
     <View>
+     {/* Localised value by key */}
       <Text>
         {l('current_language')}: {currentLocale}
       </Text>
-
+      {/* or by value in project- or default language */}
+      <Text>
+        {l('Current language')}: {currentLocale}
+      </Text>
       <Button title='English' onPress={() => setLocale('en')} />
       <Button title='Deutsch' onPress={() => setLocale('de')} />
     </View>
@@ -134,8 +138,8 @@ import { LText } from 'locon'
 function Welcome() {
   return (
     <View>
-      {/* Uses children as key */}
-      <LText>hello</LText>
+      {/* Uses children as value to find the key, with fallback children */}
+      <LText>Hello</LText>
 
       {/* Or explicit key with fallback children */}
       <LText assetKey='welcome_title'>Welcome</LText>
@@ -182,7 +186,7 @@ interface LoconProps extends PropsWithChildren {
 import { useLocon } from 'locon'
 
 const {
-  l,             // (key: string) => string
+  l,             // (key/value: string) => string
   assets,        // all assets map
   currentLocale, // current language code
   defaultLocale, // default language code
