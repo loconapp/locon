@@ -113,7 +113,7 @@ function LanguageSwitcher() {
 
   return (
     <View>
-     {/* Localised value by key */}
+      {/* Localised value by key */}
       <Text>
         {l('current_language')}: {currentLocale}
       </Text>
@@ -121,8 +121,14 @@ function LanguageSwitcher() {
       <Text>
         {l('Current language')}: {currentLocale}
       </Text>
-      <Button title='English' onPress={() => setLocale('en')} />
-      <Button title='Deutsch' onPress={() => setLocale('de')} />
+      <Button
+        title='English'
+        onPress={() => setLocale('en')}
+      />
+      <Button
+        title='Deutsch'
+        onPress={() => setLocale('de')}
+      />
     </View>
   )
 }
@@ -186,12 +192,12 @@ interface LoconProps extends PropsWithChildren {
 import { useLocon } from 'locon'
 
 const {
-  l,             // (key/value: string) => string
-  assets,        // all assets map
+  l, // (key/value: string) => string
+  assets, // all assets map
   currentLocale, // current language code
   defaultLocale, // default language code
-  autodetect,    // boolean
-  setLocale,     // (locale: string) => void
+  autodetect, // boolean
+  setLocale, // (locale: string) => void
 } = useLocon()
 ```
 
@@ -223,6 +229,39 @@ interface LTextProps extends ComponentProps<typeof Text> {
 
 ---
 
+### ESLint integration (`react-native/no-raw-text`)
+
+If you use `eslint-plugin-react-native` with the `react-native/no-raw-text`
+rule enabled, you may see errors like:
+
+> Raw text (Hello) cannot be used outside of a `<Text>` tag
+
+because the rule does not know that `LText` ultimately renders a React
+Native `<Text>` under the hood.
+
+To fix this, tell the rule to treat `LText` as an allowed wrapper:
+
+```js
+// .eslintrc.js
+module.exports = {
+  // ...
+  rules: {
+    // other rules...
+    'react-native/no-raw-text': [
+      'error',
+      {
+        skip: ['LText'],
+      },
+    ],
+  },
+}
+```
+
+This keeps the rule active for other components, but lets you freely use
+raw text inside `<LText>`.
+
+---
+
 ### TypeScript
 
 The published package contains:
@@ -239,4 +278,3 @@ support for `Locon`, `useLocon`, and `LText`.
 ### License
 
 `locon` is released under the **ISC** license.
-
