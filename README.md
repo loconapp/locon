@@ -4,6 +4,28 @@
 It provides a context provider, a hook, and a simple text component to keep
 your translations flat, explicit, and easy to use.
 
+Basic usage: use `<LText>` instead of `<Text>`. Put plain text in your project language (or the default language) inside and it will be localized automatically.
+
+```tsx
+import { LText } from 'locon'
+
+function Example() {
+  return <LText>Hello</LText>
+}
+```
+
+For dynamic strings (variables), use `useLocon()` and `l()`:
+
+```tsx
+import { Text } from 'react-native'
+import { useLocon } from 'locon'
+
+function Example({ userName }: { userName: string }) {
+  const { l } = useLocon()
+  return <Text>{l('hello')}, {userName}</Text>
+}
+```
+
 ---
 
 ### Features
@@ -88,9 +110,7 @@ function App() {
   return (
     <Locon
       assets={{ en, de }}
-      defaultLocale='en'
       projectLocale='de'
-      autodetect
     >
       <NavigationContainer theme={theme}>
         <RootNavigator />
@@ -154,7 +174,7 @@ function Welcome() {
   return (
     <View>
       {/* Uses children as value to find the key, with fallback children */}
-      <LText>Hello</LText>
+      <LText>Hallo</LText>
 
       {/* Or explicit key with fallback children */}
       <LText assetKey='welcome_title'>Welcome</LText>
@@ -189,6 +209,7 @@ interface LoconProps extends PropsWithChildren {
   Used when key is missing in the current locale.
 
 - **`projectLocale`** (default `'en'`)  
+  Define language you use for texts in your project.
   Used for reverse lookup by value (e.g. when you only know the string in
   project language).
 
