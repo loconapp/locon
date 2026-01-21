@@ -1,4 +1,4 @@
-import React, { ComponentProps, ReactElement } from 'react'
+import { ComponentProps, ReactElement } from 'react'
 import { Text } from 'react-native'
 import useLocon from '../hooks/useLocon'
 interface Props extends ComponentProps<typeof Text> {
