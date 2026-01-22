@@ -47,19 +47,29 @@ npm install locon
 yarn add locon
 ```
 
-**Important:** After installation, run pod install for iOS:
+**Peer dependencies**
+
+- `react >= 19.0.0`
+- `react-native >= 0.70.0`
+- `react-native-localize >= 3.0.0` (optional, recommended)
+
+**Optional: Enhanced language detection**
+
+For more accurate device language detection on iOS and Android, install `react-native-localize`:
+
+```bash
+npm install react-native-localize
+# or
+yarn add react-native-localize
+```
+
+Then run pod install for iOS:
 
 ```bash
 cd ios && pod install
 ```
 
-**Peer dependencies**
-
-- `react >= 19.0.0`
-- `react-native >= 0.70.0`
-- `react-native-localize >= 3.0.0` (installed automatically)
-
-`react-native-localize` is used for accurate device language detection on iOS and Android.
+If `react-native-localize` is not installed, `locon` will use fallback methods (native modules, `navigator.languages`, `Intl` API) to detect the system language. The library works fine without it, but `react-native-localize` provides the most accurate detection.
 
 ---
 
@@ -125,10 +135,13 @@ export default App
 If `currentLocale` is not provided and `autodetect` is `true` (default),
 `locon` will:
 
-1. Use `react-native-localize` to detect device locale on iOS/Android
-2. Match the detected locale (including region) or just language code against your `assets`
-3. If a match is found, use it as initial locale
-4. Otherwise, fall back to `defaultLocale`
+1. Try to use `react-native-localize` to detect device locale on iOS/Android (if installed)
+2. If `react-native-localize` is not available, use fallback methods in order:
+   - Native modules (`SettingsManager` on iOS, `I18nManager` on Android/iOS)
+   - `Intl.DateTimeFormat().resolvedOptions().locale`
+3. Match the detected locale (including region) or just language code against your `assets`
+4. If a match is found, use it as initial locale
+5. Otherwise, fall back to `defaultLocale`
 
 #### 3. Use the `useLocon()` hook
 

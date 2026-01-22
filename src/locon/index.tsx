@@ -2,6 +2,12 @@ import { createContext, PropsWithChildren, ReactElement, useCallback, useMemo, u
 import LoconContextType from './types/LoconContext'
 import getSystemLanguage from './utils/getSystemLanguage'
 
+// Debug: Log when module is loaded - THIS SHOULD APPEAR IF USING LOCAL VERSION
+// eslint-disable-next-line no-console
+console.log('🚀🚀🚀 [LOCON] LOCAL VERSION LOADED! 🚀🚀🚀')
+// eslint-disable-next-line no-console
+console.log('[LOCON] This log means we are using the local source from ../../../locon/locon/src/locon')
+
 const LoconContext = createContext<LoconContextType>({
   assets: {},
   currentLocale: 'en',
@@ -38,7 +44,7 @@ function Locon({
       const systemLang = getSystemLanguage(availableLocales)
       if (systemLang && assets[systemLang]) {
         return systemLang
-      }
+      } 
     }
     
     return defaultLocale
