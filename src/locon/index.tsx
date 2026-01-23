@@ -2,12 +2,6 @@ import { createContext, PropsWithChildren, ReactElement, useCallback, useMemo, u
 import LoconContextType from './types/LoconContext'
 import getSystemLanguage from './utils/getSystemLanguage'
 
-// Debug: Log when module is loaded - THIS SHOULD APPEAR IF USING LOCAL VERSION
-// eslint-disable-next-line no-console
-console.log('🚀🚀🚀 [LOCON] LOCAL VERSION LOADED! 🚀🚀🚀')
-// eslint-disable-next-line no-console
-console.log('[LOCON] This log means we are using the local source from ../../../locon/locon/src/locon')
-
 const LoconContext = createContext<LoconContextType>({
   assets: {},
   currentLocale: 'en',
@@ -38,15 +32,15 @@ function Locon({
     if (currentLocaleProps) {
       return currentLocaleProps
     }
-    
+
     if (autodetect) {
-      const availableLocales = Object.keys(assets)
-      const systemLang = getSystemLanguage(availableLocales)
-      if (systemLang && assets[systemLang]) {
-        return systemLang
-      } 
+      const systemLocale = getSystemLanguage(Object.keys(assets))
+
+      if (systemLocale && assets[systemLocale]) {
+        return systemLocale
+      }
     }
-    
+
     return defaultLocale
   })
 
@@ -70,7 +64,7 @@ function Locon({
       if (assets[locale]) {
         setCurrentLocale(locale)
       } else {
-        console.warn(`Locale "${locale}" not found in assets.`)
+        console.warn(`[locon] Locale "${locale}" not found in assets.`)
       }
     },
     [assets],
@@ -84,7 +78,7 @@ function Locon({
         return undefined
       }
 
-      const assetKey = Object.keys(currentAssets).find(key => currentAssets[key] === assetValue)
+      const assetKey = Object.keys(currentAssets).find((key) => currentAssets[key] === assetValue)
 
       return assetKey ? getAsset(assetKey) : undefined
     },
@@ -96,8 +90,7 @@ function Locon({
       if (!assetKey) {
         return ''
       }
-      const asset =
-        getAsset(assetKey) || getAssetByValue(assetKey) || getAssetByValue(assetKey, defaultLocale)
+      const asset = getAsset(assetKey) || getAssetByValue(assetKey) || getAssetByValue(assetKey, defaultLocale)
 
       return asset ?? assetKey
     },
