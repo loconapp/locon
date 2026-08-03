@@ -1,4 +1,4 @@
-import { createContext, PropsWithChildren, ReactElement, useCallback, useMemo, useState } from 'react'
+import { createContext, PropsWithChildren, ReactElement, useCallback, useEffect, useMemo, useState } from 'react'
 import LoconContextType from './types/LoconContext'
 import getSystemLanguage from './utils/getSystemLanguage'
 
@@ -27,6 +27,8 @@ function Locon({
   projectLocale = 'en',
   autodetect = true,
 }: Props): ReactElement {
+  const resolvedProjectLocale = projectLocale || defaultLocale
+
   // Determine initial locale: use provided currentLocale, or auto-detect if autodetect is enabled
   const [currentLocale, setCurrentLocale] = useState<string>(() => {
     if (currentLocaleProps) {
@@ -71,7 +73,7 @@ function Locon({
   )
 
   const getAssetByValue = useCallback(
-    (assetValue: string, locale: string = projectLocale): string | undefined => {
+    (assetValue: string, locale: string = resolvedProjectLocale): string | undefined => {
       const currentAssets = assets[locale]
 
       if (!currentAssets) {
@@ -82,7 +84,7 @@ function Locon({
 
       return assetKey ? getAsset(assetKey) : undefined
     },
-    [assets, getAsset, projectLocale],
+    [assets, getAsset, resolvedProjectLocale],
   )
 
   const l = useCallback(
@@ -96,6 +98,12 @@ function Locon({
     },
     [getAsset, getAssetByValue, defaultLocale],
   )
+
+  useEffect(() => {
+    if (currentLocaleProps && currentLocaleProps !== currentLocale) {
+      setCurrentLocale(currentLocaleProps)
+    }
+  }, [currentLocaleProps, currentLocale])
 
   const value: LoconContextType = useMemo(
     () => ({

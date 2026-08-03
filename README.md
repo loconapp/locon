@@ -29,10 +29,18 @@ function Example() {
 
 ### Installation
 
+Use your package manager of choice:
+
+| npm                 | yarn             | bun             |
+| ------------------- | ---------------- | --------------- |
+| `npm install locon` | `yarn add locon` | `bun add locon` |
+
 ```bash
 npm install locon
 # or
 yarn add locon
+# or
+bun add locon
 ```
 
 **Important:** After installation, run pod install for iOS:
