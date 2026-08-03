@@ -2,15 +2,15 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -25,8 +25,15 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Run release
+      - name: Build package
+        run: npm run build
+
+      - name: Create GitHub release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          gh release create "$GITHUB_REF_NAME" \
+            --title "v$VERSION" \
+            --generate-notes \
+            --verify-tag

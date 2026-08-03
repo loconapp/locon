@@ -11,8 +11,7 @@
   "scripts": {
     "build": "tsup",
     "test": "jest",
-    "publish": "npm publish",
-    "release": "semantic-release"
+    "publish": "npm publish"
   },
   "keywords": [
     "i18n",
@@ -42,13 +41,6 @@
   "devDependencies": {
     "@babel/preset-react": "^7.24.7",
     "@eslint/js": "^9.10.0",
-    "@semantic-release/commit-analyzer": "^24.1.0",
-    "@semantic-release/exec": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^11.0.1",
-    "@semantic-release/npm": "^12.0.1",
-    "@semantic-release/release-notes-generator": "^24.1.0",
-    "semantic-release": "^24.1.0",
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^16.0.1",
     "@types/jest": "^29.5.12",
