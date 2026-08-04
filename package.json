@@ -1,6 +1,6 @@
 {
   "name": "locon",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "locon is a simple and lightweight library for React Native that provides a simple way to manage translations in your app.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -27,6 +27,14 @@
   ],
   "author": "loconapp",
   "license": "ISC",
+  "homepage": "https://locon.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loconapp/locon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/loconapp/locon/issues"
+  },
   "peerDependencies": {
     "react": ">=19.0.0",
     "react-native": ">=0.70.0",

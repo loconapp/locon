@@ -4,6 +4,8 @@
 [![GitHub tag](https://img.shields.io/github/v/tag/loconapp/locon?display_name=tag)](https://github.com/loconapp/locon/tags)
 [![Release workflow](https://github.com/loconapp/locon/actions/workflows/release.yml/badge.svg)](https://github.com/loconapp/locon/actions/workflows/release.yml)
 
+[Website](https://locon.dev) · [npm](https://www.npmjs.com/package/locon) · [GitHub](https://github.com/loconapp/locon)
+
 `locon` is a small, typed i18n helper for React Native.  
 It provides a context provider, a hook, and a simple text component to keep
 your translations flat, explicit, and easy to use.
