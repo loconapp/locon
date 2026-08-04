@@ -100,10 +100,10 @@ function Locon({
   )
 
   useEffect(() => {
-    if (currentLocaleProps && currentLocaleProps !== currentLocale) {
-      setCurrentLocale(currentLocaleProps)
+    if (currentLocaleProps) {
+      setCurrentLocale((locale) => (locale === currentLocaleProps ? locale : currentLocaleProps))
     }
-  }, [currentLocaleProps, currentLocale])
+  }, [currentLocaleProps])
 
   const value: LoconContextType = useMemo(
     () => ({
