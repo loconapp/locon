@@ -3,6 +3,7 @@ import LoconContextType from './types/LoconContext'
 import TranslateOptions from './types/TranslateOptions'
 import createTranslator from './utils/createTranslator'
 import getSystemLanguage from './utils/getSystemLanguage'
+import resolveLocale from './utils/resolveLocale'
 import { isRtlLocale } from './utils/rtl'
 
 // Used outside a provider: no assets, so every lookup resolves to its own
@@ -55,18 +56,14 @@ function Locon({
   const locales = useMemo(() => Object.keys(assets), [assets])
   const systemLocale = useMemo(() => (autodetect ? getSystemLanguage(locales) : null), [autodetect, locales])
 
-  const [currentLocale, setCurrentLocale] = useState<string>(() => {
-    if (currentLocaleProps) {
-      return currentLocaleProps
-    }
-
-    return systemLocale ?? defaultLocale
-  })
+  const [currentLocale, setCurrentLocale] = useState<string>(() =>
+    resolveLocale({ assets, currentLocale: currentLocaleProps, defaultLocale, autodetect, systemLocale }),
+  )
 
   const setCurrentLocaleHandler = useCallback(
     (locale: string | null) => {
       if (locale === null) {
-        setCurrentLocale(systemLocale ?? defaultLocale)
+        setCurrentLocale(resolveLocale({ assets, defaultLocale, autodetect, systemLocale }))
 
         return
       }
@@ -78,7 +75,7 @@ function Locon({
         console.warn(`[locon] Locale "${locale}" not found in assets.`)
       }
     },
-    [assets, systemLocale, defaultLocale],
+    [assets, systemLocale, defaultLocale, autodetect],
   )
 
   const l = useMemo(
@@ -105,13 +102,13 @@ function Locon({
     }
 
     if (currentLocaleProps === null) {
-      setCurrentLocale(systemLocale ?? defaultLocale)
+      setCurrentLocale(resolveLocale({ assets, defaultLocale, autodetect, systemLocale }))
 
       return
     }
 
     setCurrentLocale((locale) => (locale === currentLocaleProps ? locale : currentLocaleProps))
-  }, [currentLocaleProps, systemLocale, defaultLocale])
+  }, [assets, currentLocaleProps, systemLocale, defaultLocale, autodetect])
 
   const value: LoconContextType = useMemo(
     () => ({
@@ -149,6 +146,8 @@ export { default as LText } from './components/LText'
 export { default as useLocon } from './hooks/useLocon'
 export { default as createTranslator } from './utils/createTranslator'
 export { default as getSystemLanguage } from './utils/getSystemLanguage'
+export { default as resolveLocale } from './utils/resolveLocale'
+export { default as intlLocale } from './utils/intlLocale'
 export { applyRTL, isRtlLocale, RTL_LANGUAGES, RTL_SCRIPTS } from './utils/rtl'
 export { LoconContext }
 export type { default as Assets } from './types/Assets'

@@ -6,6 +6,8 @@ export default defineConfig({
     'src/locon/utils/getSystemLanguage.ts',
     'src/locon/utils/createTranslator.ts',
     'src/locon/utils/rtl.ts',
+    'src/locon/utils/resolveLocale.ts',
+    'src/locon/utils/intlLocale.ts',
     'src/locon/components/LText.tsx',
     'src/locon/hooks/useLocon.ts',
     'src/locon/types/Assets.ts',
