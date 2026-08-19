@@ -18,6 +18,7 @@
     "react-native",
     "react native",
     "reactjs",
+    "expo",
     "localization",
     "globalization",
     "translations",
@@ -36,11 +37,15 @@
     "url": "https://github.com/loconapp/locon/issues"
   },
   "peerDependencies": {
+    "expo-localization": ">=14.0.0",
     "react": ">=19.0.0",
     "react-native": ">=0.70.0",
     "react-native-localize": "^3.0.0"
   },
   "peerDependenciesMeta": {
+    "expo-localization": {
+      "optional": true
+    },
     "react-native-localize": {
       "optional": true
     }

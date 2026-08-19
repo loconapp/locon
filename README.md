@@ -25,10 +25,14 @@ function Example() {
 ### Features
 
 - **React Native–first**: tiny API, no global singletons
+- **Expo-ready**: detects the device language through `expo-localization`, no native linking
 - **Context provider** with pluggable assets (per-locale JSON)
 - **Device language auto-detection** (optional)
 - **`useLocon()` hook** for accessing translations and changing locale
 - **`<LText>` component** as a drop-in localized `<Text>`
+- **Interpolation and plurals** via `{token}` params and CLDR plural categories
+- **Locale-scoped lookups** with `lIn()` / `createTranslator()` — render a PDF in one language while the UI is in another
+- **RTL aware**: `isRTL` on the context, plus an explicit `applyRTL()` helper
 - Fully typed TypeScript build (`dist/index.d.ts`)
 
 ---
@@ -49,32 +53,68 @@ yarn add locon
 bun add locon
 ```
 
-**Important:** After installation, run pod install for iOS:
-
-```bash
-cd ios && pod install
-```
-
 **Peer dependencies**
 
 - `react >= 19.0.0`
 - `react-native >= 0.70.0`
-- `react-native-localize >= 3.0.0` (optional, but recommended for accurate device language detection)
+- **one** of the following, if you want native device-language detection:
+  - `expo-localization >= 14.0.0` — for Expo apps
+  - `react-native-localize >= 3.0.0` — for bare React Native apps
 
-`react-native-localize` is used for accurate device language detection on iOS and Android.
-It is not installed automatically — add it to your app if you want native locale detection:
+Both are optional. Without either, `locon` falls back to React Native's own
+`NativeModules` and then to the `Intl` API, which is usually enough to get the
+language right but ignores the user's ordered language preferences.
+
+In a bare React Native app, install `react-native-localize` and run pods:
 
 ```bash
 yarn add react-native-localize
-# or
-npm install react-native-localize
-```
-
-Then run iOS pods:
-
-```bash
 cd ios && pod install
 ```
+
+---
+
+### Use with Expo
+
+`locon` needs no native module of its own, so it works in the managed
+workflow, in a dev client, and in Expo Go.
+
+```bash
+npx expo install expo-localization
+```
+
+That is the whole integration — detection picks `expo-localization` up
+automatically when it is installed.
+
+To make the languages you ship visible to the operating system and the stores,
+declare them in `app.json`. This is what puts your app in the App Store's
+"Languages" list and in Android 13+'s per-app language picker:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "ios": ["de", "en", "fr", "ar"],
+            "android": ["de", "en", "fr", "ar"]
+          },
+          "supportsRTL": true,
+          "allowDynamicLocaleChangesAndroid": true
+        }
+      ]
+    ]
+  }
+}
+```
+
+Then run `npx expo prebuild` so the config lands in the native projects.
+
+> The locales you list here are independent of the store listing languages
+> Apple and Google support: shipping a bundled translation is always allowed,
+> even for a language whose store page you cannot localize.
 
 ---
 
@@ -140,12 +180,16 @@ export default App
 If `currentLocale` is not provided and `autodetect` is `true` (default),
 `locon` will:
 
-1. Use `react-native-localize` (if installed) to detect device locale on iOS/Android
-2. Match the detected locale (including region) or just language code against your `assets`
-3. If a match is found, use it as initial locale
+1. Read the device's preferred languages from the first source available —
+   `react-native-localize`, then `expo-localization`, then React Native's
+   `NativeModules`, then `Intl`
+2. Match each one against your `assets`, widening from the exact tag (`pt-BR`)
+   to the language subtag (`pt`) to any locale in the same language
+3. If a match is found, use it as the initial locale
 4. Otherwise, fall back to `defaultLocale`
 
-If `react-native-localize` is not installed, `locon` falls back to the Intl API.
+Device order is preference order, so a user whose second language you ship
+gets that rather than your default.
 
 #### 3. Use the `useLocon()` hook
 
@@ -209,7 +253,7 @@ function Welcome() {
 ```ts
 interface LoconProps extends PropsWithChildren {
   assets?: Record<string, Record<string, string>>
-  currentLocale?: string
+  currentLocale?: string | null
   defaultLocale?: string
   projectLocale?: string
   autodetect?: boolean
@@ -217,10 +261,21 @@ interface LoconProps extends PropsWithChildren {
 ```
 
 - **`assets`**  
-  Map of locale → flat translations, e.g. `{ en: { hello: 'Hello' }, de: { hello: 'Hallo' } }`
+  Map of locale → flat translations, e.g. `{ en: { hello: 'Hello' }, de: { hello: 'Hallo' } }`  
+  Keep this object stable (module constant or `useMemo`) — `locon` caches its
+  value→key index against the object's identity.
 
 - **`currentLocale`**  
-  Initial locale. If provided, it overrides auto-detection.
+  Which locale to show:
+
+  - a **string** pins that locale and overrides auto-detection
+  - **`null`** explicitly follows the device language
+  - **omitted** leaves the locale uncontrolled after the initial detection
+
+  The `null` form is what apps with a "System" option in their language picker
+  want: persist the user's choice as `string | null` and pass it straight
+  through, and switching back to "System" re-detects immediately instead of
+  waiting for a restart.
 
 - **`defaultLocale`** (default `'en'`)  
   Used when key is missing in the current locale.
@@ -239,21 +294,74 @@ interface LoconProps extends PropsWithChildren {
 import { useLocon } from 'locon'
 
 const {
-  l, // (key/value: string) => string
+  l, // (key/value: string, options?: TranslateOptions) => string
+  lIn, // (locale: string, key/value: string, options?) => string
   assets, // all assets map
+  locales, // every locale present in assets
   currentLocale, // current language code
   defaultLocale, // default language code
+  projectLocale, // language your source strings are written in
+  systemLocale, // locale detected from the device, or null
+  isRTL, // whether currentLocale is written right-to-left
   autodetect, // boolean
-  setLocale, // (locale: string) => void
+  setLocale, // (locale: string | null) => void
 } = useLocon()
 ```
 
-- `l(key)`  
+- `l(key, options?)`  
   Returns the localized string or the key itself if nothing was found.
+
+- `lIn(locale, key, options?)`  
+  Same resolution, forced into `locale`. Handy for rendering one screen
+  section — or one exported document — in another language.
 
 - `setLocale(locale)`  
   Switches to `locale` if it exists in `assets`, otherwise logs a warning
-  in development.
+  in development. Pass `null` to go back to following the device language.
+
+#### `TranslateOptions`
+
+```ts
+interface TranslateOptions {
+  params?: Record<string, string | number>
+  count?: number
+  locale?: string
+}
+```
+
+**Interpolation** — `{token}` placeholders are replaced from `params`.
+Unknown tokens are left as-is rather than blanked:
+
+```json
+{ "saved_radius": "{m} m radius · saved" }
+```
+
+```tsx
+l('saved_radius', { params: { m: 150 } }) // → '150 m radius · saved'
+```
+
+**Plurals** — pass `count` and suffix your keys with the CLDR plural
+_category_, which is exactly what `Intl.PluralRules` returns for that locale.
+`{count}` is interpolated for free.
+
+```json
+// en.json — two forms
+{ "day_one": "{count} day", "day_other": "{count} days" }
+
+// ru.json — three
+{ "day_one": "{count} день", "day_few": "{count} дня", "day_many": "{count} дней" }
+
+// ar.json — up to six
+{ "day_zero": "…", "day_one": "…", "day_two": "…", "day_few": "…", "day_many": "…", "day_other": "…" }
+```
+
+```tsx
+l('day', { count: 5 }) // en → '5 days' · ru → '5 дней'
+```
+
+There is deliberately no generic `_plural` suffix: most languages do not have
+a single plural form. Categories fall back to `_other`, then to the bare key,
+so a locale only needs the forms it actually inflects.
 
 #### `<LText />`
 
@@ -261,6 +369,9 @@ const {
 interface LTextProps extends ComponentProps<typeof Text> {
   children: string
   assetKey?: string
+  params?: Record<string, string | number>
+  count?: number
+  locale?: string
 }
 ```
 
@@ -273,6 +384,64 @@ interface LTextProps extends ComponentProps<typeof Text> {
      `children` as a key in the current locale.
   3. If still nothing is found, fall back to the **default locale**.
   4. If there is no match anywhere, render `children` as-is.
+
+Fallback happens **per key**, not per locale: a string missing from the current
+locale falls back on its own, so a half-finished translation stays readable
+instead of rendering blank.
+
+#### `createTranslator()` — localization outside React
+
+The resolver the provider uses, available on its own. Use it wherever there is
+no React tree: generating a PDF or spreadsheet, composing an e-mail, or
+building a notification from a background task.
+
+```ts
+import { createTranslator } from 'locon'
+import de from './assets/i18n/de.json'
+import tr from './assets/i18n/tr.json'
+
+const l = createTranslator({
+  assets: { de, tr },
+  locale: 'tr', // the document's language …
+  defaultLocale: 'en',
+  projectLocale: 'de', // … regardless of what the UI is showing
+})
+
+l('Arbeitszeit') // → 'Çalışma süresi'
+```
+
+This is what lets an app export a report in a language the interface is not
+currently in — a user browsing in Turkish can still hand their employer a
+German timesheet.
+
+#### RTL
+
+```ts
+import { applyRTL, isRtlLocale, useLocon } from 'locon'
+
+isRtlLocale('ar') // true
+isRtlLocale('ar-EG') // true — region subtags are ignored
+isRtlLocale('pa-Arab') // true — an explicit script subtag wins
+isRtlLocale('ha') // false — CLDR treats Hausa as Latin-script
+
+const { isRTL } = useLocon() // direction of the current locale
+```
+
+`applyRTL(locale)` aligns React Native's `I18nManager` with the locale and
+returns `true` when the direction actually changed — which means the app has
+to restart before the new direction renders. `locon` never restarts your app
+for you; prompt the user, or reload with `expo-updates`:
+
+```tsx
+const needsRestart = applyRTL('ar')
+
+if (needsRestart) {
+  Alert.alert('Restart required', 'Reopen the app to apply the new direction.')
+}
+```
+
+On Expo, set `supportsRTL: true` in the `expo-localization` plugin config
+(see [Use with Expo](#use-with-expo)) or iOS will ignore the direction change.
 
 ---
 

@@ -1,148 +1,167 @@
 /**
- * Detects the system language and returns the best matching available locale.
- * Uses react-native-localize if available, otherwise falls back to native APIs.
+ * Detects the device language and returns the best matching available locale.
+ *
+ * Sources are tried in order of accuracy and then discarded silently if the
+ * module is not installed, so an app only needs whichever one it already has:
+ *
+ *   1. `react-native-localize` — bare React Native
+ *   2. `expo-localization`     — Expo (managed, dev client, and Expo Go)
+ *   3. React Native's own `NativeModules` — no extra dependency
+ *   4. `Intl` — web, tests, and anything else
+ *
+ * A missing optional module is a normal state, not a failure: only a module
+ * that exists and then throws is worth warning about.
  */
-function getSystemLanguage(availableLocales?: string[]): string | null {
-  if (!availableLocales?.length) return null
 
+/** True for `Cannot find module 'x'`-style failures from `require`. */
+function isModuleNotFound(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'MODULE_NOT_FOUND'
+}
+
+/**
+ * Picks the first device tag that the app actually ships.
+ *
+ * Matching widens progressively: exact tag (`pt-BR`), then language subtag
+ * (`pt`), then any available locale in the same language (device asks for
+ * `pt`, app ships only `pt-BR`). Device order is preference order, so the
+ * user's first choice wins over a closer match further down the list.
+ */
+function matchLocale(deviceTags: string[], availableLocales: string[]): string | null {
+  const available = availableLocales.map((locale) => ({ locale, lower: locale.toLowerCase() }))
+
+  for (const tag of deviceTags) {
+    if (!tag) {
+      continue
+    }
+
+    const lowerTag = tag.toLowerCase()
+    const languageCode = lowerTag.split(/[-_]/)[0]
+
+    const exact = available.find((entry) => entry.lower === lowerTag)
+
+    if (exact) {
+      return exact.locale
+    }
+
+    const language = available.find((entry) => entry.lower === languageCode)
+
+    if (language) {
+      return language.locale
+    }
+
+    const sameLanguage = available.find((entry) => entry.lower.split(/[-_]/)[0] === languageCode)
+
+    if (sameLanguage) {
+      return sameLanguage.locale
+    }
+  }
+
+  return null
+}
+
+/** Device language tags from `react-native-localize`, most preferred first. */
+function tagsFromReactNativeLocalize(): string[] {
   try {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
-      const RNLocalize = require('react-native-localize')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    const RNLocalize = require('react-native-localize')
 
-      if (typeof RNLocalize.findBestLanguageTag === 'function') {
-        const best = RNLocalize.findBestLanguageTag(availableLocales)
-
-        if (best?.languageTag) {
-          const { languageTag } = best
-          const languageCode = languageTag.split('-')[0]?.toLowerCase()
-
-          if (availableLocales.includes(languageTag)) {
-            return languageTag
-          }
-
-          if (languageCode && availableLocales.includes(languageCode)) {
-            return languageCode
-          }
-        }
-      }
-
-      if (typeof RNLocalize.getLocales === 'function') {
-        const locales = RNLocalize.getLocales()
-
-        const matchedLocale = locales.find((locale: { languageCode: string; languageTag: string }) => {
-          const languageCode = locale.languageCode.toLowerCase()
-
-          if (languageCode && availableLocales.includes(languageCode)) {
-            return true
-          }
-
-          if (locale.languageTag) {
-            const tagCode = locale.languageTag.split('-')[0]?.toLowerCase()
-
-            if (tagCode && availableLocales.includes(tagCode)) {
-              return true
-            }
-          }
-
-          return false
-        })
-
-        if (matchedLocale) {
-          const languageCode = matchedLocale.languageCode.toLowerCase()
-
-          if (availableLocales.includes(languageCode)) {
-            return languageCode
-          }
-
-          if (matchedLocale.languageTag) {
-            const tagCode = matchedLocale.languageTag.split('-')[0]?.toLowerCase()
-
-            if (tagCode && availableLocales.includes(tagCode)) {
-              return tagCode
-            }
-          }
-        }
-      }
-    } catch (localizeError) {
-      // eslint-disable-next-line no-console
-      console.warn('[locon] ❌ react-native-localize error:', localizeError)
+    if (typeof RNLocalize?.getLocales === 'function') {
+      return RNLocalize.getLocales().flatMap((locale: { languageTag?: string; languageCode?: string }) =>
+        [locale.languageTag, locale.languageCode].filter(Boolean),
+      )
     }
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
-      const { NativeModules, Platform } = require('react-native')
-
-      if (Platform.OS === 'ios') {
-        const { SettingsManager } = NativeModules
-
-        if (SettingsManager?.settings?.AppleLanguages) {
-          const appleLanguages = SettingsManager.settings.AppleLanguages as string[]
-
-          const supportedLanguage = appleLanguages
-            .map(lang => lang.split('-')[0]?.toLowerCase())
-            .filter((languageCode): languageCode is string => Boolean(languageCode))
-            .find(languageCode => availableLocales.includes(languageCode))
-
-          if (supportedLanguage) {
-            return supportedLanguage
-          }
-        }
-
-        const { I18nManager } = NativeModules
-
-        if (I18nManager?.localeIdentifier) {
-          const languageCode = (I18nManager.localeIdentifier as string).split('-')[0]?.toLowerCase()
-
-          if (languageCode) {
-            const supportedLanguage = availableLocales.find(locale => locale === languageCode)
-
-            if (supportedLanguage) {
-              return supportedLanguage
-            }
-          }
-        }
-      } else if (Platform.OS === 'android') {
-        const { I18nManager } = NativeModules
-
-        if (I18nManager?.localeIdentifier) {
-          const languageCode = (I18nManager.localeIdentifier as string).split('-')[0]?.toLowerCase()
-
-          if (languageCode) {
-            const supportedLanguage = availableLocales.find(locale => locale === languageCode)
-
-            if (supportedLanguage) {
-              return supportedLanguage
-            }
-          }
-        }
-      }
-    } catch (rnError) {
-      // eslint-disable-next-line no-console
-      console.warn('[locon] ❌ react-native error:', rnError)
-    }
-
-    const systemLocale = Intl.DateTimeFormat().resolvedOptions().locale
-
-    if (systemLocale) {
-      const languageCode = systemLocale.split('-')[0]?.toLowerCase()
-
-      if (languageCode) {
-        const supportedLanguage = availableLocales.find(locale => locale === languageCode)
-
-        if (supportedLanguage) {
-          return supportedLanguage
-        }
-      }
-    }
-
-    return null
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn('[locon] ❌ Could not detect system language:', error)
+    if (!isModuleNotFound(error)) {
+      // eslint-disable-next-line no-console
+      console.warn('[locon] react-native-localize failed:', error)
+    }
+  }
 
-    return null
+  return []
+}
+
+/** Device language tags from `expo-localization`, most preferred first. */
+function tagsFromExpoLocalization(): string[] {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    const Localization = require('expo-localization')
+
+    if (typeof Localization?.getLocales === 'function') {
+      return Localization.getLocales().flatMap((locale: { languageTag?: string; languageCode?: string }) =>
+        [locale.languageTag, locale.languageCode].filter(Boolean),
+      )
+    }
+  } catch (error) {
+    if (!isModuleNotFound(error)) {
+      // eslint-disable-next-line no-console
+      console.warn('[locon] expo-localization failed:', error)
+    }
+  }
+
+  return []
+}
+
+/** Device language tags from React Native core, without any extra dependency. */
+function tagsFromNativeModules(): string[] {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    const { NativeModules, Platform } = require('react-native')
+
+    const tags: string[] = []
+
+    if (Platform?.OS === 'ios') {
+      const appleLanguages = NativeModules?.SettingsManager?.settings?.AppleLanguages
+
+      if (Array.isArray(appleLanguages)) {
+        tags.push(...(appleLanguages as string[]))
+      }
+    }
+
+    const localeIdentifier = NativeModules?.I18nManager?.localeIdentifier
+
+    if (typeof localeIdentifier === 'string') {
+      tags.push(localeIdentifier)
+    }
+
+    return tags
+  } catch {
+    // Not running under React Native at all.
+    return []
   }
 }
 
+/** Device language tag from the JS runtime. */
+function tagsFromIntl(): string[] {
+  try {
+    const systemLocale = Intl.DateTimeFormat().resolvedOptions().locale
+
+    return systemLocale ? [systemLocale] : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Best available locale for this device, or `null` when none of the device's
+ * languages is one the app ships.
+ */
+function getSystemLanguage(availableLocales?: string[]): string | null {
+  if (!availableLocales?.length) {
+    return null
+  }
+
+  const sources = [tagsFromReactNativeLocalize, tagsFromExpoLocalization, tagsFromNativeModules, tagsFromIntl]
+
+  for (const source of sources) {
+    const match = matchLocale(source(), availableLocales)
+
+    if (match) {
+      return match
+    }
+  }
+
+  return null
+}
+
 export default getSystemLanguage
+export { matchLocale }
