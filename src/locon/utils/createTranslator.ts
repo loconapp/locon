@@ -74,6 +74,17 @@ function interpolate(value: string, params?: Record<string, string | number>): s
   )
 }
 
+/**
+ * Trailing CLDR plural category on an already-resolved key.
+ *
+ * Value lookup lands on whichever variant carries the source phrase — writing
+ * `l('Noch {count} Minuten Pause.', { count })` resolves to the `_other` key,
+ * since that is the form the German sentence is written in. Suffixing *that*
+ * would ask for `…_other_one`, so the category is stripped back off before
+ * the plural form is chosen.
+ */
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/
+
 /** CLDR plural category for `count`, e.g. `one` / `few` / `many` / `other`. */
 function pluralCategory(count: number, locale: string): string {
   try {
@@ -124,7 +135,8 @@ function createTranslator({ assets, locale, defaultLocale = 'en', projectLocale 
     }
 
     const targetLocale = options?.locale || locale
-    const key = keyFor(assetKey, targetLocale)
+    const resolvedKey = keyFor(assetKey, targetLocale)
+    const key = options?.count === undefined ? resolvedKey : resolvedKey.replace(PLURAL_SUFFIX, '')
 
     // Plural variants are tried first, then the bare key, so a string only
     // needs `_one`/`_other` forms in the locales that actually inflect.

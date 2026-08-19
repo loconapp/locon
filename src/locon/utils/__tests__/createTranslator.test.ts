@@ -96,6 +96,16 @@ describe('createTranslator', () => {
     expect(arabic('day', { count: 100 })).toBe('100 يوم')
   })
 
+  it('selects a plural form when the input is a source-language phrase', () => {
+    // The German sentence is written in the _other form, so value lookup
+    // lands on `day_other`; asking for count 1 must still reach `day_one`.
+    const german = createTranslator({ assets, locale: 'de', defaultLocale: 'en', projectLocale: 'de' })
+
+    expect(german('{count} Tage', { count: 1 })).toBe('1 Tag')
+    expect(german('{count} Tage', { count: 3 })).toBe('3 Tage')
+    expect(l('{count} Tage', { count: 1 })).toBe('1 gün')
+  })
+
   it('falls back to _other when a locale omits a category it does not need', () => {
     // Turkish has no distinct singular here; `day_other` covers every count.
     expect(l('day', { count: 1 })).toBe('1 gün')
