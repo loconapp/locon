@@ -445,6 +445,37 @@ On Expo, set `supportsRTL: true` in the `expo-localization` plugin config
 
 ---
 
+### Keeping translations in sync
+
+Value-based lookup makes the assets easy to write and easy to break quietly: a
+typo in an `<LText>` child is not a compile error, it just renders your source
+language to someone who cannot read it.
+
+The package ships a skill and two scripts for that. Audit a project's assets
+against its code:
+
+```bash
+node node_modules/locon/skills/locon-sync/scripts/check-locon-assets.mjs --source de
+```
+
+It checks that every phrase in the code resolves, that all locales carry the
+same keys, that placeholders line up, that no locale has picked up characters
+from another script, and that nothing addresses a key where a source phrase
+belongs. It exits non-zero, so it works as a CI step.
+
+`write_locale.py` generates a locale file from the source locale, preserving
+key order and grouping and refusing to write anything that breaks an
+invariant — including the plural rules, where a target language may add
+categories the source has no equivalent for (Polish `_few`, Arabic `_two`).
+
+If you use an agentic coding tool that supports skills, point it at
+`node_modules/locon/skills/locon-sync/` (or copy the folder into your own
+skills directory) and it will follow the same workflow, including the parts
+that are not about strings at all — fonts for new scripts, calendars and
+numbering systems, RTL, and store metadata.
+
+---
+
 ### ESLint integration (`react-native/no-raw-text`)
 
 If you use `eslint-plugin-react-native` with the `react-native/no-raw-text`
