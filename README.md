@@ -181,7 +181,7 @@ If `currentLocale` is not provided and `autodetect` is `true` (default),
 `locon` will:
 
 1. Read the device's preferred languages from the first source available —
-   `react-native-localize`, then `expo-localization`, then React Native's
+   `expo-localization`, then `react-native-localize`, then React Native's
    `NativeModules`, then `Intl`
 2. Match each one against your `assets`, widening from the exact tag (`pt-BR`)
    to the language subtag (`pt`) to any locale in the same language

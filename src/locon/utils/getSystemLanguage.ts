@@ -1,21 +1,41 @@
 /**
  * Detects the device language and returns the best matching available locale.
  *
- * Sources are tried in order of accuracy and then discarded silently if the
- * module is not installed, so an app only needs whichever one it already has:
+ * Sources are tried in order and discarded silently when the module is not
+ * installed, so an app only needs whichever one it already has:
  *
- *   1. `react-native-localize` — bare React Native
- *   2. `expo-localization`     — Expo (managed, dev client, and Expo Go)
+ *   1. `expo-localization`     — Expo (managed, dev client, and Expo Go)
+ *   2. `react-native-localize` — bare React Native
  *   3. React Native's own `NativeModules` — no extra dependency
  *   4. `Intl` — web, tests, and anything else
+ *
+ * Expo comes first because it is the larger population and the one where the
+ * other module is guaranteed absent: trying it first means a typical Expo app
+ * never walks the failing path at all.
  *
  * A missing optional module is a normal state, not a failure: only a module
  * that exists and then throws is worth warning about.
  */
 
-/** True for `Cannot find module 'x'`-style failures from `require`. */
+/**
+ * True when `require` failed because the module simply is not installed.
+ *
+ * Node sets `code: 'MODULE_NOT_FOUND'`, but Metro throws a plain `Error:
+ * Cannot find module 'x'` with no code at all — so a code-only check made
+ * every Expo app log a warning about `react-native-localize` on each launch,
+ * for an optional dependency it was never expected to have.
+ */
 function isModuleNotFound(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | undefined)?.code === 'MODULE_NOT_FOUND'
+  const candidate = error as { code?: string; message?: string } | undefined
+
+  if (candidate?.code === 'MODULE_NOT_FOUND') {
+    return true
+  }
+
+  // Metro: "Requiring unknown module \"x\"". Node: "Cannot find module 'x'".
+  return /cannot find module|requiring unknown module|could not be found|unable to resolve/i.test(
+    candidate?.message ?? '',
+  )
 }
 
 /**
@@ -150,7 +170,7 @@ function getSystemLanguage(availableLocales?: string[]): string | null {
     return null
   }
 
-  const sources = [tagsFromReactNativeLocalize, tagsFromExpoLocalization, tagsFromNativeModules, tagsFromIntl]
+  const sources = [tagsFromExpoLocalization, tagsFromReactNativeLocalize, tagsFromNativeModules, tagsFromIntl]
 
   for (const source of sources) {
     const match = matchLocale(source(), availableLocales)
