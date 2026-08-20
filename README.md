@@ -362,6 +362,21 @@ _category_, which is exactly what `Intl.PluralRules` returns for that locale.
 When `params` also contains a `count` key, the dedicated `count` option wins so
 the rendered number always agrees with the selected plural form.
 
+Locon delegates category selection to the runtime's `Intl.PluralRules`:
+
+```ts
+const ruPlural = new Intl.PluralRules('ru')
+
+ruPlural.select(21) // → 'one'
+ruPlural.select(22) // → 'few'
+ruPlural.select(25) // → 'many'
+ruPlural.select(1.5) // → 'other'
+```
+
+See the [ECMA-402 `Intl.PluralRules.select()` specification](https://tc39.es/ecma402/#sec-intl.pluralrules.prototype.select)
+and [Unicode CLDR's Russian plural rules](https://unicode.org/cldr/charts/49/verify/numbers/ru.html)
+for the exact language-specific rules and examples.
+
 These are all six possible suffixes. The count examples are locale-specific,
 not universal rules:
 
