@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Locon Sync'
+  short_description: 'Audit and synchronize locon translation assets'
+  default_prompt: 'Use $locon-sync to audit and synchronize this project’s translation assets.'

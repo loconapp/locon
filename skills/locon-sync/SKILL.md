@@ -1,6 +1,6 @@
 ---
 name: locon-sync
-description: Synchronise locon translation assets across every language a project supports — audit the locale files against the code and against each other, fill in what is missing, and verify parity, placeholders, plural categories and script integrity. Use when adding a language, adding or changing UI strings, or auditing an existing translation set in any app that uses the locon i18n library.
+description: Synchronize locon translation assets across every language a project supports. Audit locale JSON against code and declared languages; verify key parity, placeholders, CLDR plurals, duplicate keys, and script integrity; generate safe locale files. Use when adding a language, adding or changing UI strings, fixing missing translations, or auditing any app that uses locon.
 ---
 
 # Syncing locon translation assets
@@ -22,20 +22,30 @@ Never assume paths. Find them:
   source of truth; every other file is derived from it.
 - **Default language** — the `defaultLocale` prop, used when a key is missing.
 - **Declared languages** — the list the app ships. Cross-check it against the
-  files on disk in *both* directions: a declared language with no file renders
+  files on disk in _both_ directions: a declared language with no file renders
   entirely in the source language.
 
-Then run the audit:
+Resolve the directory containing this `SKILL.md` as
+`LOCON_SYNC_SKILL_DIR`. Never assume the current working directory contains the
+skill. Then run the audit from the app's root and pass every declared locale:
 
 ```bash
-node skills/locon-sync/scripts/check-locon-assets.mjs --source de
+node "$LOCON_SYNC_SKILL_DIR/scripts/check-locon-assets.mjs" \
+  --source de \
+  --locales de,en,fr
 ```
 
 This scans static strings in JavaScript/TypeScript (single, double, or template
-quotes), `lIn()` calls and `LText` children/`assetKey` props. Orphaned keys are
-advisory because dynamic usages cannot be proven by a source scan; projects
-whose lookups are entirely static can enforce them in CI with
-`--strict-orphans`.
+quotes), `lIn()` calls and `LText` children/`assetKey` props. It ignores calls
+inside comments and string examples. Orphaned keys and plural categories that
+currently fall back to `_other` are advisory because static analysis cannot
+prove either is wrong. Enforce them in CI with `--strict-orphans` and
+`--strict-plurals` when the project keeps both explicit.
+
+Pass `--allow-keys key_a,key_b` only for deliberate direct-key disambiguation.
+Pass `--allow-implicit-count ar:day_one,ar:day_two` only when those exact
+translations state the number in words and therefore intentionally omit
+`{count}`. Treat an unused allow-list entry as stale configuration.
 
 ## 2. The invariants
 
@@ -44,7 +54,7 @@ Every one of these has broken a real project.
 **Key parity.** Every locale carries every key the source has.
 
 **No duplicate source values.** Two keys with the same source phrase means only
-the *first* is reachable by value lookup. The second is dead weight translators
+the _first_ is reachable by value lookup. The second is dead weight translators
 will fill in for nothing, and any difference between the two translations
 silently never appears. Either merge them, or keep both and have the code
 address the shadowed one by key (`assetKey`) — the one legitimate reason to
@@ -57,11 +67,12 @@ needs two forms, Polish and Russian three, Arabic up to six. **A target locale
 may add categories the source language lacks**; that is correct, not an error.
 `_other` is the mandatory catch-all, and also what English uses as its plural.
 
-**Placeholders match exactly,** with one exception: a category that already
-states the number may drop `{count}`. Arabic `يوم واحد` and Hebrew
-`נותרה דקה אחת` already mean "one day" / "one minute"; repeating the digit
-reads as "1 one day". A translation may never *introduce* a placeholder the
-source lacks.
+**Placeholders match exactly.** Allow a missing `{count}` only for an explicit
+locale/key pair whose words state the exact number. Arabic `يوم واحد` and
+Hebrew `נותרה דקה אחת` already mean "one day" / "one minute"; repeating the
+digit reads as "1 one day". Never infer this from `_one`: Russian selects
+`_one` for 21, so `day_one: "день"` would incorrectly render just "день".
+A translation may never introduce a placeholder the source lacks.
 
 **No foreign scripts.** Machine-assisted translation occasionally drops a
 fragment of the wrong alphabet into a string — a CJK word inside Russian prose.
@@ -74,17 +85,23 @@ language names in a picker are always endonyms, because a row reading
 
 ## 3. Filling in a locale
 
-Generate files with the bundled script rather than by hand, so key order,
-grouping and parity are guaranteed by construction:
+Put the completed target values in a temporary flat JSON object, then generate
+the locale with the bundled CLI so key order, grouping and parity are
+guaranteed by construction:
 
-```python
-from write_locale import write
-write('fr', { 'greeting': 'Bonjour', ... })
+```bash
+python3 "$LOCON_SYNC_SKILL_DIR/scripts/write_locale.py" \
+  --locale fr \
+  --input /tmp/fr.json \
+  --assets src/i18n/assets \
+  --source de
 ```
 
-It takes the source file as the key order, copies its blank-line grouping so
-files stay diffable side by side, accepts extra plural categories, and refuses
-to write anything that fails an invariant.
+For an intentional implicit number, add for example
+`--allow-implicit-count day_one,day_two`. The writer validates before an atomic
+replace, copies the source file's blank-line grouping, accepts target-specific
+plural categories, and refuses unsafe locale names, duplicate JSON keys,
+parity errors, or placeholder drift.
 
 Translate **meaning, not words**. UI copy has length constraints, and a literal
 rendering of a German compound will overflow a button in Finnish. Keep the
@@ -97,7 +114,7 @@ Confirm the code addresses strings by source phrase. Keys in application code
 defeat the point of the library:
 
 ```tsx
-l('E-Mail nicht verfügbar')          // ✅
+l('E-Mail nicht verfügbar') // ✅
 l('settings_mail_unavailable_title') // ❌ unless deliberately disambiguating
 ```
 
@@ -119,7 +136,7 @@ Shipping a language is more than its JSON. Check whether the project needs:
 - **Fonts for the new scripts.** Most Latin webfonts carry no Cyrillic, Greek,
   Arabic, Hebrew, Devanagari, Thai or CJK glyphs, and a loaded font missing a
   glyph renders a tofu box on Android rather than falling back. Registering a
-  script's font *under the app's existing family names* fixes every screen
+  script's font _under the app's existing family names_ fixes every screen
   without touching a single StyleSheet. For CJK, loading nothing is often the
   right answer: those families are tens of megabytes, and an unregistered
   family name falls back to the platform's own system face.
@@ -136,6 +153,6 @@ Shipping a language is more than its JSON. Check whether the project needs:
   which is what makes the stores list the languages and what gives Android 13+
   its per-app language picker. Translated permission strings go in `locales`.
 - **Which languages the stores actually accept.** A bundled translation is
-  always allowed, but a *store listing* is not: the App Store and Google Play
+  always allowed, but a _store listing_ is not: the App Store and Google Play
   support overlapping-but-different sets. Ship what you like; just do not
   promise a store page you cannot publish.

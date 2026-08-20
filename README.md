@@ -594,13 +594,17 @@ The package ships a skill and two scripts for that. Audit a project's assets
 against its code:
 
 ```bash
-node node_modules/locon/skills/locon-sync/scripts/check-locon-assets.mjs --source de
+node node_modules/locon/skills/locon-sync/scripts/check-locon-assets.mjs \
+  --source de \
+  --locales de,en,fr
 ```
 
 It checks that every statically written phrase in the code resolves, that all
-locales carry the same keys, that placeholders line up, that no locale has
-picked up characters from another script, and that nothing addresses a key
-where a source phrase belongs. It exits non-zero, so it works as a CI step.
+declared locales have files, that all locale files carry the same keys, that
+placeholders line up, that duplicate JSON keys cannot be silently overwritten,
+that no locale has picked up characters from another script, and that nothing
+addresses a key where a source phrase belongs. It exits non-zero, so it works
+as a CI step.
 
 Orphaned keys are reported but are advisory by default: a lightweight source
 scan cannot prove that a dynamically selected string is unused. In a project
@@ -610,16 +614,48 @@ that keeps lookups static, make them fatal too:
 node node_modules/locon/skills/locon-sync/scripts/check-locon-assets.mjs --source de --strict-orphans
 ```
 
-`write_locale.py` generates a locale file from the source locale, preserving
-key order and grouping and refusing to write anything that breaks an
-invariant — including the plural rules, where a target language may add
-categories the source has no equivalent for (Polish `_few`, Arabic `_two`).
+Missing CLDR categories are also advisory because locon deliberately falls
+back to `_other`; use `--strict-plurals` when every selectable category must be
+written explicitly. If two source values intentionally differ only by context,
+allow their direct keys with `--allow-keys key_a,key_b`.
+
+`{count}` must match by default. Allow an exact translation to omit it only by
+locale and key, for example
+`--allow-implicit-count ar:day_one,ar:day_two`. This is never inferred from the
+suffix: Russian 21 selects `_one`, so an unparameterized `day_one: "день"`
+would lose the number.
+
+`write_locale.py` validates before atomically replacing a locale file,
+preserves source key order and grouping, and accepts target-specific plural
+categories:
+
+```bash
+python3 node_modules/locon/skills/locon-sync/scripts/write_locale.py \
+  --locale fr \
+  --input /tmp/fr.json \
+  --assets src/i18n/assets \
+  --source de
+```
 
 If you use an agentic coding tool that supports skills, point it at
 `node_modules/locon/skills/locon-sync/` (or copy the folder into your own
 skills directory) and it will follow the same workflow, including the parts
 that are not about strings at all — fonts for new scripts, calendars and
 numbering systems, RTL, and store metadata.
+
+Claude Code and Codex both use the open Agent Skills format but scan different
+project directories. Keep one canonical npm copy and expose it to both from
+the app root:
+
+```bash
+mkdir -p .claude/skills .agents/skills
+ln -s ../../node_modules/locon/skills/locon-sync .claude/skills/locon-sync
+ln -s ../../node_modules/locon/skills/locon-sync .agents/skills/locon-sync
+```
+
+Claude can then invoke `/locon-sync`; Codex can invoke `$locon-sync`. Both may
+also load it automatically when a localization task matches its description.
+Copy the folder instead on systems where project symlinks are unavailable.
 
 ---
 
