@@ -88,7 +88,7 @@ const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/
 /** CLDR plural category for `count`, e.g. `one` / `few` / `many` / `other`. */
 function pluralCategory(count: number, locale: string): string {
   try {
-    return new Intl.PluralRules(locale).select(count)
+    return new Intl.PluralRules(locale.replace(/_/g, '-')).select(count)
   } catch {
     // Locale unknown to Intl (or Intl absent): English-ish rule is a safer
     // guess than crashing a render.
@@ -138,21 +138,24 @@ function createTranslator({ assets, locale, defaultLocale = 'en', projectLocale 
     const resolvedKey = keyFor(assetKey, targetLocale)
     const key = options?.count === undefined ? resolvedKey : resolvedKey.replace(PLURAL_SUFFIX, '')
 
-    // Plural variants are tried first, then the bare key, so a string only
-    // needs `_one`/`_other` forms in the locales that actually inflect.
-    const keys =
-      options?.count === undefined
-        ? [key]
-        : [`${key}_${pluralCategory(options.count, targetLocale)}`, `${key}_other`, key]
-
     // `{count}` is interpolable without being repeated in `params`.
-    const params = options?.count === undefined ? options?.params : { count: options.count, ...options.params }
+    // The dedicated option is authoritative: it must not select one plural
+    // form while a conflicting `params.count` renders a different number.
+    const params = options?.count === undefined ? options?.params : { ...options.params, count: options.count }
 
     // Per-key fallback: current locale → default → project language. Falling
     // back per key (not per whole locale) is what keeps a half-finished
     // translation readable instead of blank.
     for (const candidateLocale of [targetLocale, defaultLocale, resolvedProjectLocale]) {
-      for (const candidateKey of keys) {
+      // A fallback locale can have different CLDR rules from the requested
+      // locale. Recompute the category for each candidate rather than, for
+      // example, using Chinese `other` to read a Russian fallback for count 1.
+      const candidateKeys =
+        options?.count === undefined
+          ? [key]
+          : [`${key}_${pluralCategory(options.count, candidateLocale)}`, `${key}_other`, key]
+
+      for (const candidateKey of candidateKeys) {
         const value = read(candidateLocale, candidateKey)
 
         if (value !== undefined) {
@@ -163,7 +166,7 @@ function createTranslator({ assets, locale, defaultLocale = 'en', projectLocale 
 
     // Nothing anywhere: render the input itself. For value-style usage that is
     // the source-language phrase, which is a usable last resort.
-    return interpolate(assetKey, params)
+    return interpolate(options?.fallback ?? assetKey, params)
   }
 }
 

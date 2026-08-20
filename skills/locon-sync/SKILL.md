@@ -31,6 +31,12 @@ Then run the audit:
 node skills/locon-sync/scripts/check-locon-assets.mjs --source de
 ```
 
+This scans static strings in JavaScript/TypeScript (single, double, or template
+quotes), `lIn()` calls and `LText` children/`assetKey` props. Orphaned keys are
+advisory because dynamic usages cannot be proven by a source scan; projects
+whose lookups are entirely static can enforce them in CI with
+`--strict-orphans`.
+
 ## 2. The invariants
 
 Every one of these has broken a real project.

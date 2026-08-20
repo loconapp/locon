@@ -25,12 +25,12 @@ const LoconContext = createContext<LoconContextType>({
   lIn: (locale, assetKey, options) => fallbackTranslator(assetKey, { ...options, locale }),
 })
 
-interface Props extends PropsWithChildren {
+interface LoconProps extends PropsWithChildren {
   assets?: Record<string, Record<string, string>>
   /**
    * Locale to display.
    *
-   * - a string pins that locale
+   * - a string selects that locale; later prop changes select the new value
    * - `null` explicitly follows the device language
    * - omitted leaves the locale uncontrolled after the initial detection
    *
@@ -51,7 +51,7 @@ function Locon({
   defaultLocale = 'en',
   projectLocale = 'en',
   autodetect = true,
-}: Props): ReactElement {
+}: LoconProps): ReactElement {
   const resolvedProjectLocale = projectLocale || defaultLocale
   const locales = useMemo(() => Object.keys(assets), [assets])
   const systemLocale = useMemo(() => (autodetect ? getSystemLanguage(locales) : null), [autodetect, locales])
@@ -71,7 +71,6 @@ function Locon({
       if (assets[locale]) {
         setCurrentLocale(locale)
       } else {
-        // eslint-disable-next-line no-console
         console.warn(`[locon] Locale "${locale}" not found in assets.`)
       }
     },
@@ -151,5 +150,10 @@ export { default as intlLocale } from './utils/intlLocale'
 export { applyRTL, isRtlLocale, RTL_LANGUAGES, RTL_SCRIPTS } from './utils/rtl'
 export { LoconContext }
 export type { default as Assets } from './types/Assets'
+export type { default as LoconContextValue } from './types/LoconContext'
 export type { default as TranslateOptions } from './types/TranslateOptions'
-export type { Translator } from './utils/createTranslator'
+export type { LTextProps } from './components/LText'
+export type { IntlExtensions } from './utils/intlLocale'
+export type { ResolveLocaleConfig } from './utils/resolveLocale'
+export type { Translator, TranslatorConfig } from './utils/createTranslator'
+export type { LoconProps }

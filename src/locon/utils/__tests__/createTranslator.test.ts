@@ -68,6 +68,10 @@ describe('createTranslator', () => {
     expect(l('day', { count: 3 })).toBe('3 gün')
   })
 
+  it('keeps count authoritative when params also contains count', () => {
+    expect(l('day', { count: 3, params: { count: 99 } })).toBe('3 gün')
+  })
+
   it('selects the two German forms', () => {
     const german = createTranslator({ assets, locale: 'de', defaultLocale: 'en', projectLocale: 'de' })
 
@@ -83,6 +87,17 @@ describe('createTranslator', () => {
     expect(russian('day', { count: 5 })).toBe('5 дней')
     expect(russian('day', { count: 11 })).toBe('11 дней')
     expect(russian('day', { count: 21 })).toBe('21 день')
+  })
+
+  it('normalizes underscore locale tags before selecting a plural category', () => {
+    const russian = createTranslator({
+      assets: { ...assets, ru_RU: assets.ru },
+      locale: 'ru_RU',
+      defaultLocale: 'en',
+      projectLocale: 'de',
+    })
+
+    expect(russian('day', { count: 2 })).toBe('2 дня')
   })
 
   it('selects all six Arabic forms', () => {
@@ -111,6 +126,19 @@ describe('createTranslator', () => {
     expect(l('day', { count: 1 })).toBe('1 gün')
   })
 
+  it('uses the fallback locale plural rules when the target has no translation', () => {
+    const chineseWithRussianFallback = createTranslator({
+      assets: { zh: {}, ru: assets.ru },
+      locale: 'zh',
+      defaultLocale: 'ru',
+      projectLocale: 'ru',
+    })
+
+    expect(chineseWithRussianFallback('day', { count: 1 })).toBe('1 день')
+    expect(chineseWithRussianFallback('day', { count: 2 })).toBe('2 дня')
+    expect(chineseWithRussianFallback('day', { count: 5 })).toBe('5 дней')
+  })
+
   it('renders one call in another locale', () => {
     expect(l('greeting', { locale: 'de' })).toBe('Guten Morgen')
   })
@@ -128,6 +156,10 @@ describe('createTranslator', () => {
 
   it('returns the input when nothing matches anywhere', () => {
     expect(l('untranslated phrase')).toBe('untranslated phrase')
+  })
+
+  it('returns an explicit human-readable fallback when nothing matches', () => {
+    expect(l('missing_key', { fallback: 'Missing translation' })).toBe('Missing translation')
   })
 
   it('returns an empty string for an empty input', () => {

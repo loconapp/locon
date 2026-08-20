@@ -1,13 +1,13 @@
 declare module 'react-native' {
-  import { ComponentType, ReactElement } from 'react'
-  
+  import { ComponentType } from 'react'
+
   export interface TextProps {
     children?: React.ReactNode
     [key: string]: any
   }
-  
+
   export const Text: ComponentType<TextProps>
-  
+
   export const View: ComponentType<any>
   export const Image: ComponentType<any>
   export const ScrollView: ComponentType<any>

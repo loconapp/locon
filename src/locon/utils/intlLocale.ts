@@ -22,39 +22,57 @@ interface IntlExtensions {
  * in the tag are left alone, so an explicit choice by the caller wins.
  */
 function intlLocale(locale: string, extensions: IntlExtensions = {}): string {
-  const requested: string[] = []
+  const normalizedLocale = locale.replace(/_/g, '-')
+  const requested: Array<[key: string, value: string]> = []
 
   if (extensions.calendar) {
-    requested.push('ca', extensions.calendar)
+    requested.push(['ca', extensions.calendar])
   }
 
   if (extensions.numbering) {
-    requested.push('nu', extensions.numbering)
+    requested.push(['nu', extensions.numbering])
   }
 
   if (!requested.length) {
-    return locale
+    return normalizedLocale
   }
 
-  const [base, ...rest] = locale.split('-u-')
+  const subtags = normalizedLocale.split('-')
+  const isSingleton = (subtag: string) => subtag.length === 1
+  const privateUseIndex = subtags.findIndex((subtag, index) => index > 0 && subtag.toLowerCase() === 'x')
+  const unicodeIndex = subtags.findIndex(
+    (subtag, index) => index > 0 && (privateUseIndex < 0 || index < privateUseIndex) && subtag.toLowerCase() === 'u',
+  )
 
-  if (!rest.length) {
-    return `${base}-u-${requested.join('-')}`
-  }
+  if (unicodeIndex >= 0) {
+    const nextSingleton = subtags.findIndex((subtag, index) => index > unicodeIndex && isSingleton(subtag))
+    const unicodeEnd = nextSingleton < 0 ? subtags.length : nextSingleton
+    const existingKeys = new Set(
+      subtags
+        .slice(unicodeIndex + 1, unicodeEnd)
+        .filter((subtag) => subtag.length === 2)
+        .map((subtag) => subtag.toLowerCase()),
+    )
+    const additions = requested.flatMap(([key, value]) => (existingKeys.has(key) ? [] : [key, value]))
 
-  // Keep whatever the tag already declares; only add the missing keys.
-  const existing = rest.join('-u-')
-  const additions: string[] = []
-
-  for (let index = 0; index < requested.length; index += 2) {
-    const key = requested[index]
-
-    if (!new RegExp(`(^|-)${key}-`).test(existing)) {
-      additions.push(key, requested[index + 1])
+    if (!additions.length) {
+      return normalizedLocale
     }
+
+    // Unicode keywords belong inside the `u` extension. In particular they
+    // must precede a later transformed/private-use singleton (`-t-`/`-x-`),
+    // otherwise Intl treats them as part of that extension and ignores them.
+    subtags.splice(unicodeEnd, 0, ...additions)
+
+    return subtags.join('-')
   }
 
-  return additions.length ? `${base}-u-${existing}-${additions.join('-')}` : locale
+  const insertionIndex = privateUseIndex < 0 ? subtags.length : privateUseIndex
+
+  // Private use must remain the final extension in a BCP-47 tag.
+  subtags.splice(insertionIndex, 0, 'u', ...requested.flat())
+
+  return subtags.join('-')
 }
 
 export default intlLocale

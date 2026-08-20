@@ -2,7 +2,7 @@ import { ComponentProps, ReactElement } from 'react'
 import { Text } from 'react-native'
 import useLocon from '../hooks/useLocon'
 
-interface Props extends ComponentProps<typeof Text> {
+interface LTextProps extends ComponentProps<typeof Text> {
   children: string
   assetKey?: string
   /** Values for `{token}` placeholders. */
@@ -13,10 +13,12 @@ interface Props extends ComponentProps<typeof Text> {
   locale?: string
 }
 
-function LText({ children, assetKey, params, count, locale, ...props }: Props): ReactElement {
+function LText({ children, assetKey, params, count, locale, ...props }: LTextProps): ReactElement {
   const { l } = useLocon()
+  const value = l(assetKey || children, { params, count, locale, fallback: assetKey ? children : undefined })
 
-  return <Text {...props}>{l(assetKey || children, { params, count, locale })}</Text>
+  return <Text {...props}>{value}</Text>
 }
 
 export default LText
+export type { LTextProps }

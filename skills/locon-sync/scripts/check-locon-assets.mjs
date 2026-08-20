@@ -11,15 +11,18 @@
  *   2. every locale has exactly the keys the source locale has
  *   3. placeholders match (with a documented exception for plurals)
  *   4. no unreachable duplicate values
- *   5. no orphaned keys nothing in the code asks for
+ *   5. report orphaned keys nothing in the code asks for (optionally strict)
  *   6. the code addresses strings by source phrase, not by key
  *   7. no stray characters from another script
  *
  * Usage:
  *   node check-locon-assets.mjs [--source de] [--assets src/i18n/assets]
  *                               [--src app,src] [--allow-keys a,b]
+ *                               [--strict-orphans]
  *
- * Exits non-zero when anything is wrong, so it works as a CI step.
+ * Exits non-zero for correctness failures, so it works as a CI step. Orphans
+ * are advisory unless `--strict-orphans` is passed because dynamic usages
+ * cannot be proven by a lightweight source scan.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -34,6 +37,7 @@ const ROOT = resolve(args.get('root') ?? process.cwd());
 const SOURCE_LOCALE = args.get('source') ?? 'en';
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
 const IMPLIES_COUNT = /_(zero|one|two)$/;
+const STRICT_ORPHANS = args.has('strict-orphans');
 
 /** Keys the code may address directly, because their value is shadowed. */
 const ALLOWED_KEYS = new Set((args.get('allow-keys') ?? '').split(',').filter(Boolean));
@@ -74,6 +78,14 @@ if (!source) {
 }
 
 const sourceKeys = Object.keys(source);
+const pluralFamilies = new Set(sourceKeys.filter((key) => PLURAL_SUFFIX.test(key)).map((key) => key.replace(PLURAL_SUFFIX, '')));
+
+for (const family of pluralFamilies) {
+  if (!(`${family}_other` in source)) {
+    note(`source plural family "${family}" must define ${family}_other as its catch-all`);
+  }
+}
+
 const valueToKey = new Map();
 const shadowed = [];
 for (const key of sourceKeys) {
@@ -89,7 +101,7 @@ function walk(dir) {
     if (entry === 'node_modules' || entry.startsWith('.')) return [];
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) return walk(full);
-    return /\.tsx?$/.test(full) ? [full] : [];
+    return /\.[jt]sx?$/.test(full) ? [full] : [];
   });
 }
 
@@ -102,23 +114,94 @@ const used = [];
 /** Every string literal, for usage detection only (arrays, consts, …). */
 const literals = new Set();
 
+/** Reads a static JS string/template literal at `start`, without evaluating it. */
+function readLiteralAt(code, start) {
+  const quote = code[start];
+  if (!['\'', '"', '`'].includes(quote)) return null;
+
+  let raw = '';
+  for (let index = start + 1; index < code.length; index += 1) {
+    const char = code[index];
+
+    if (char === '\\') {
+      raw += char + (code[index + 1] ?? '');
+      index += 1;
+      continue;
+    }
+    if (char === quote) {
+      // Interpolated templates are dynamic and cannot be audited statically.
+      if (quote === '`' && raw.includes('${')) return null;
+
+      const value = raw
+        .replace(/\\u\{([0-9a-f]+)\}/gi, (_, point) => String.fromCodePoint(Number.parseInt(point, 16)))
+        .replace(/\\u([0-9a-f]{4})/gi, (_, point) => String.fromCharCode(Number.parseInt(point, 16)))
+        .replace(/\\x([0-9a-f]{2})/gi, (_, point) => String.fromCharCode(Number.parseInt(point, 16)))
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\(['"`\\])/g, '$1');
+
+      return { value, end: index + 1 };
+    }
+    if (quote !== '`' && (char === '\n' || char === '\r')) return null;
+    raw += char;
+  }
+
+  return null;
+}
+
+/** Returns a static literal used as an attribute value, if present. */
+function attributeLiteral(attributes, name) {
+  const match = new RegExp(`\\b${name}\\s*=\\s*(?:\\{\\s*)?`).exec(attributes);
+  return match ? readLiteralAt(attributes, match.index + match[0].length)?.value : undefined;
+}
+
 for (const file of files) {
   const code = readFileSync(file, 'utf8');
 
-  for (const match of code.matchAll(/'((?:[^'\\\n]|\\.)*)'/g)) {
-    literals.add(match[1].replace(/\\'/g, "'"));
+  // All static literals count for orphan detection, including arrays and
+  // constants referenced indirectly by the UI.
+  for (let index = 0; index < code.length; index += 1) {
+    const literal = readLiteralAt(code, index);
+    if (!literal) continue;
+    literals.add(literal.value);
+    index = literal.end - 1;
   }
-  for (const match of code.matchAll(/\bl\(\s*'((?:[^'\\]|\\.)*)'/g)) {
-    used.push({ phrase: match[1].replace(/\\'/g, "'"), file });
+
+  // `l()` accepts a source phrase as its first argument. Support every static
+  // JS quote style; interpolated templates remain intentionally dynamic.
+  for (const match of code.matchAll(/\bl\s*\(\s*/g)) {
+    const literal = readLiteralAt(code, match.index + match[0].length);
+    if (literal) used.push({ phrase: literal.value, file });
   }
-  for (const match of code.matchAll(/<LText\b[^>]*>([^<>{}]+)<\/LText>/g)) {
-    used.push({ phrase: collapse(match[1]), file });
+
+  // `lIn(locale, phrase)` uses its second argument as the lookup input. This
+  // deliberately handles the normal identifier/static-locale forms without
+  // pretending a regex is a complete TypeScript parser.
+  for (const match of code.matchAll(/\blIn\s*\(\s*[^,\n]+,\s*/g)) {
+    const literal = readLiteralAt(code, match.index + match[0].length);
+    if (literal) used.push({ phrase: literal.value, file });
+  }
+
+  for (const match of code.matchAll(/<LText\b([^>]*)>([\s\S]*?)<\/LText>/g)) {
+    const assetKey = attributeLiteral(match[1], 'assetKey');
+
+    if (assetKey) {
+      used.push({ phrase: assetKey, file, directKey: true });
+    } else if (!/[<>{}]/.test(match[2])) {
+      used.push({ phrase: collapse(match[2]), file });
+    }
+  }
+
+  for (const match of code.matchAll(/<LText\b([^>]*)\/>/g)) {
+    const assetKey = attributeLiteral(match[1], 'assetKey');
+    if (assetKey) used.push({ phrase: assetKey, file, directKey: true });
   }
 }
 
 const resolvedKeys = new Set();
 
-for (const { phrase, file } of used) {
+for (const { phrase, file, directKey } of used) {
   if (!phrase) continue;
   const rel = file.replace(`${ROOT}/`, '');
   const isKey = phrase in source;
@@ -127,10 +210,16 @@ for (const { phrase, file } of used) {
   const isPluralBase = sourceKeys.some((key) => key.replace(PLURAL_SUFFIX, '') === base && key !== base);
 
   if (!isKey && !isValue && !isPluralBase) {
-    note(`unresolved phrase in ${rel}: "${phrase}"`);
+    note(`unresolved ${directKey ? 'asset key' : 'phrase'} in ${rel}: "${phrase}"`);
   }
   if (isValue) resolvedKeys.add(valueToKey.get(phrase));
-  if (isKey && !isValue && !ALLOWED_KEYS.has(phrase)) {
+  if (isKey) resolvedKeys.add(phrase);
+  if (isPluralBase) {
+    for (const key of sourceKeys) {
+      if (key.replace(PLURAL_SUFFIX, '') === base) resolvedKeys.add(key);
+    }
+  }
+  if (!directKey && isKey && !isValue && !ALLOWED_KEYS.has(phrase)) {
     note(`key used instead of source phrase in ${rel}: ${phrase} — write l('${source[phrase]}')`);
   }
 }
@@ -181,18 +270,38 @@ for (const locale of locales) {
 
 // ── script sanity ─────────────────────────────────────────────────────
 const FOREIGN_SCRIPTS = [
-  { name: 'CJK', pattern: /[぀-ヿ一-鿿가-힯]/, allowed: ['ja', 'ko', 'zh', 'zh-Hans', 'zh-Hant'] },
-  { name: 'Cyrillic', pattern: /[Ѐ-ӿ]/, allowed: ['ru', 'uk', 'be', 'bg', 'sr', 'mk', 'kk'] },
-  { name: 'Arabic', pattern: /[؀-ۿ]/, allowed: ['ar', 'fa', 'ur', 'ps', 'ckb'] },
-  { name: 'Hebrew', pattern: /[֐-׿]/, allowed: ['he', 'yi'] },
-  { name: 'Devanagari', pattern: /[ऀ-ॿ]/, allowed: ['hi', 'mr', 'ne'] },
-  { name: 'Thai', pattern: /[฀-๿]/, allowed: ['th'] },
-  { name: 'Greek', pattern: /[Ͱ-Ͽ]/, allowed: ['el'] },
+  {
+    name: 'CJK',
+    pattern: /[぀-ヿ一-鿿가-힯]/,
+    languages: ['ja', 'ko', 'zh'],
+    scripts: ['hani', 'hans', 'hant', 'jpan', 'kore'],
+  },
+  {
+    name: 'Cyrillic',
+    pattern: /[Ѐ-ӿ]/,
+    languages: ['ru', 'uk', 'be', 'bg', 'sr', 'mk', 'kk'],
+    scripts: ['cyrl'],
+  },
+  {
+    name: 'Arabic',
+    pattern: /[؀-ۿ]/,
+    languages: ['ar', 'azb', 'ckb', 'fa', 'ks', 'lrc', 'mzn', 'ps', 'sd', 'ug', 'ur'],
+    scripts: ['arab', 'aran'],
+  },
+  { name: 'Hebrew', pattern: /[֐-׿]/, languages: ['he', 'yi'], scripts: ['hebr'] },
+  { name: 'Devanagari', pattern: /[ऀ-ॿ]/, languages: ['hi', 'mr', 'ne'], scripts: ['deva'] },
+  { name: 'Thai', pattern: /[฀-๿]/, languages: ['th'], scripts: ['thai'] },
+  { name: 'Greek', pattern: /[Ͱ-Ͽ]/, languages: ['el'], scripts: ['grek'] },
 ];
 
 for (const locale of locales) {
-  for (const { name, pattern, allowed } of FOREIGN_SCRIPTS) {
-    if (allowed.includes(locale)) continue;
+  const subtags = locale.toLowerCase().split(/[-_]/);
+  const language = subtags[0];
+  const explicitScript = subtags.slice(1).find((subtag) => /^[a-z]{4}$/.test(subtag));
+
+  for (const { name, pattern, languages, scripts } of FOREIGN_SCRIPTS) {
+    const allowed = explicitScript ? scripts.includes(explicitScript) : languages.includes(language);
+    if (allowed) continue;
     for (const [key, value] of Object.entries(assets[locale])) {
       if (pattern.test(value)) note(`${locale}.json contains ${name} characters in ${key}: "${value}"`);
     }
@@ -230,6 +339,10 @@ console.log(`code:    ${files.length} files, ${usedPhrases.size} distinct phrase
 if (orphans.length) {
   console.log(`\norphaned keys (${orphans.length}) — nothing in the code asks for these:`);
   for (const key of orphans) console.log(`  ${key}  =  "${source[key]}"`);
+}
+
+if (STRICT_ORPHANS && orphans.length) {
+  note(`${orphans.length} orphaned key(s); remove them or rerun without --strict-orphans`);
 }
 
 if (problems.length) {

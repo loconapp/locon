@@ -41,35 +41,87 @@ function isModuleNotFound(error: unknown): boolean {
 /**
  * Picks the first device tag that the app actually ships.
  *
- * Matching widens progressively: exact tag (`pt-BR`), then language subtag
- * (`pt`), then any available locale in the same language (device asks for
- * `pt`, app ships only `pt-BR`). Device order is preference order, so the
- * user's first choice wins over a closer match further down the list.
+ * Matching widens progressively: exact tag (`pt-BR`), then the same script
+ * (explicit or inferred: `zh-TW` → `zh-Hant`), then a bare language subtag
+ * (`de-AT` → `de`), then any available locale in the same language (device
+ * asks for `pt`, app ships only `pt-BR`). Device order is preference order, so
+ * the user's first choice wins over a closer match further down the list.
  */
 function matchLocale(deviceTags: string[], availableLocales: string[]): string | null {
-  const available = availableLocales.map((locale) => ({ locale, lower: locale.toLowerCase() }))
+  const parse = (locale: string) => {
+    const normalized = locale.toLowerCase().replace(/_/g, '-')
+    const subtags = normalized.split('-')
+    const extensionIndex = subtags.findIndex((subtag, index) => index > 0 && subtag.length === 1)
+    const coreSubtags = subtags.slice(1, extensionIndex < 0 ? undefined : extensionIndex)
+
+    const explicitScript = coreSubtags.find((subtag) => /^[a-z]{4}$/.test(subtag))
+    const region = coreSubtags.find((subtag) => /^[a-z]{2}$|^\d{3}$/.test(subtag))
+    const chineseRegionScript =
+      subtags[0] === 'zh' && region
+        ? ['tw', 'hk', 'mo'].includes(region)
+          ? 'hant'
+          : ['cn', 'sg', 'my'].includes(region)
+            ? 'hans'
+            : undefined
+        : undefined
+    let script = explicitScript ?? chineseRegionScript
+
+    if (!script) {
+      try {
+        script = new Intl.Locale(normalized).maximize().script?.toLowerCase()
+      } catch {
+        // Invalid tag or a runtime without Intl.Locale: language fallback below.
+      }
+    }
+
+    return {
+      normalized,
+      language: subtags[0],
+      // Script is normally the second subtag. Looking until the first
+      // extension also handles legacy extlang-shaped tags without confusing a
+      // four-character variant beginning with a digit for a script. Likely
+      // subtags distinguish region-only tags such as zh-TW and zh-CN.
+      explicitScript,
+      script,
+    }
+  }
+  const available = availableLocales.map((locale) => ({ locale, ...parse(locale) }))
 
   for (const tag of deviceTags) {
     if (!tag) {
       continue
     }
 
-    const lowerTag = tag.toLowerCase()
-    const languageCode = lowerTag.split(/[-_]/)[0]
+    const requested = parse(tag)
 
-    const exact = available.find((entry) => entry.lower === lowerTag)
+    const exact = available.find((entry) => entry.normalized === requested.normalized)
 
     if (exact) {
       return exact.locale
     }
 
-    const language = available.find((entry) => entry.lower === languageCode)
+    // Script is semantically significant: Traditional and Simplified Chinese
+    // (or Serbian Cyrillic and Latin) are not interchangeable merely because
+    // their language subtag is the same.
+    const languageEntries = available.filter((entry) => entry.language === requested.language)
+    const availableScripts = new Set(languageEntries.map((entry) => entry.script).filter(Boolean))
+    const scriptMatters = Boolean(requested.explicitScript || availableScripts.size > 1)
+    const sameScript =
+      scriptMatters && requested.script
+        ? available.find((entry) => entry.language === requested.language && entry.script === requested.script)
+        : undefined
+
+    if (sameScript) {
+      return sameScript.locale
+    }
+
+    const language = available.find((entry) => entry.normalized === requested.language)
 
     if (language) {
       return language.locale
     }
 
-    const sameLanguage = available.find((entry) => entry.lower.split(/[-_]/)[0] === languageCode)
+    const sameLanguage = available.find((entry) => entry.language === requested.language)
 
     if (sameLanguage) {
       return sameLanguage.locale
@@ -82,7 +134,7 @@ function matchLocale(deviceTags: string[], availableLocales: string[]): string |
 /** Device language tags from `react-native-localize`, most preferred first. */
 function tagsFromReactNativeLocalize(): string[] {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const RNLocalize = require('react-native-localize')
 
     if (typeof RNLocalize?.getLocales === 'function') {
@@ -92,7 +144,6 @@ function tagsFromReactNativeLocalize(): string[] {
     }
   } catch (error) {
     if (!isModuleNotFound(error)) {
-      // eslint-disable-next-line no-console
       console.warn('[locon] react-native-localize failed:', error)
     }
   }
@@ -103,7 +154,7 @@ function tagsFromReactNativeLocalize(): string[] {
 /** Device language tags from `expo-localization`, most preferred first. */
 function tagsFromExpoLocalization(): string[] {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Localization = require('expo-localization')
 
     if (typeof Localization?.getLocales === 'function') {
@@ -113,7 +164,6 @@ function tagsFromExpoLocalization(): string[] {
     }
   } catch (error) {
     if (!isModuleNotFound(error)) {
-      // eslint-disable-next-line no-console
       console.warn('[locon] expo-localization failed:', error)
     }
   }
@@ -124,7 +174,7 @@ function tagsFromExpoLocalization(): string[] {
 /** Device language tags from React Native core, without any extra dependency. */
 function tagsFromNativeModules(): string[] {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { NativeModules, Platform } = require('react-native')
 
     const tags: string[] = []

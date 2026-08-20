@@ -1,6 +1,6 @@
 import { act } from 'react'
 import { createRoot, Root } from 'react-dom/client'
-import Locon, { useLocon } from '../index'
+import Locon, { LText, useLocon } from '../index'
 
 jest.mock('react-native', () => ({ Text: 'span' }), { virtual: true })
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -182,5 +182,49 @@ describe('Locon context values', () => {
     expect(container.querySelector('[data-testid="rtl"]')?.textContent).toBe('true')
     expect(container.querySelector('[data-testid="locales"]')?.textContent).toBe('de,en,fr,ar')
     expect(container.querySelector('[data-testid="in-german"]')?.textContent).toBe('Guten Morgen')
+  })
+})
+
+describe('LText explicit-key fallback', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('renders children only when an explicit key is genuinely unresolved', () => {
+    act(() => {
+      root.render(
+        <Locon
+          assets={{ en: { literal: 'literal' } }}
+          currentLocale='en'
+          autodetect={false}
+        >
+          <LText
+            data-testid='missing'
+            assetKey='missing_key'
+          >
+            Human fallback
+          </LText>
+          <LText
+            data-testid='literal'
+            assetKey='literal'
+          >
+            Must not replace a real translation
+          </LText>
+        </Locon>,
+      )
+    })
+
+    expect(container.querySelector('[data-testid="missing"]')?.textContent).toBe('Human fallback')
+    expect(container.querySelector('[data-testid="literal"]')?.textContent).toBe('literal')
   })
 })

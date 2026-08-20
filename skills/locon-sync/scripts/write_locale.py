@@ -25,6 +25,7 @@ ASSETS = pathlib.Path(os.environ.get('LOCON_ASSETS', 'src/i18n/assets'))
 SOURCE_LOCALE = os.environ.get('LOCON_SOURCE', 'en')
 
 PLURAL = re.compile(r'_(zero|one|two|few|many|other)$')
+PLURAL_CATEGORIES = ('zero', 'one', 'two', 'few', 'many', 'other')
 # Categories that already state the number, so repeating {count} would read as
 # "1 one day". These may omit it; no category may ever add a placeholder.
 IMPLIES_COUNT = re.compile(r'_(zero|one|two)$')
@@ -47,6 +48,12 @@ for _line in _source_path.read_text().splitlines():
         BOUNDARIES.add(_prev)
 
 FAMILIES = {PLURAL.sub('', k) for k in SOURCE if PLURAL.search(k)}
+MISSING_OTHER = [family for family in sorted(FAMILIES) if f'{family}_other' not in SOURCE]
+if MISSING_OTHER:
+    sys.exit(
+        f'{SOURCE_LOCALE}: plural families must define an _other catch-all: '
+        + ', '.join(MISSING_OTHER)
+    )
 
 
 def write(locale: str, values: dict) -> None:
@@ -78,10 +85,13 @@ def write(locale: str, values: dict) -> None:
     # Source order, with any extra plural categories beside their family.
     ordered = []
     for key in SOURCE:
-        ordered.append(key)
+        if key not in ordered:
+            ordered.append(key)
         if PLURAL.search(key):
             base = PLURAL.sub('', key)
-            for category in ('zero', 'two', 'few', 'many'):
+            # Include every target-specific category, including `_one` when a
+            # source language (for example Turkish) only carries `_other`.
+            for category in PLURAL_CATEGORIES:
                 sibling = f'{base}_{category}'
                 if sibling in values and sibling not in ordered:
                     ordered.append(sibling)

@@ -33,6 +33,7 @@ function Example() {
 - **Interpolation and plurals** via `{token}` params and CLDR plural categories
 - **Locale-scoped lookups** with `lIn()` / `createTranslator()` — render a PDF in one language while the UI is in another
 - **RTL aware**: `isRTL` on the context, plus an explicit `applyRTL()` helper
+- **Locale utilities** — `resolveLocale()`, `getSystemLanguage()` and `intlLocale()`, usable without a provider
 - Fully typed TypeScript build (`dist/index.d.ts`)
 
 ---
@@ -59,7 +60,7 @@ bun add locon
 - `react-native >= 0.70.0`
 - **one** of the following, if you want native device-language detection:
   - `expo-localization >= 14.0.0` — for Expo apps
-  - `react-native-localize >= 3.0.0` — for bare React Native apps
+  - `react-native-localize 3.x` — for bare React Native apps
 
 Both are optional. Without either, `locon` falls back to React Native's own
 `NativeModules` and then to the `Intl` API, which is usually enough to get the
@@ -153,6 +154,8 @@ import en from './assets/i18n/en.json'
 import de from './assets/i18n/de.json'
 import RootNavigator from './RootNavigator'
 
+const assets = { en, de }
+
 function App() {
   const theme = {
     ...DefaultTheme,
@@ -164,7 +167,7 @@ function App() {
 
   return (
     <Locon
-      assets={{ en, de }}
+      assets={assets}
       projectLocale='de'
     >
       <NavigationContainer theme={theme}>
@@ -180,11 +183,13 @@ export default App
 If `currentLocale` is not provided and `autodetect` is `true` (default),
 `locon` will:
 
-1. Read the device's preferred languages from the first source available —
+1. Read the device's preferred languages from these sources in order —
    `expo-localization`, then `react-native-localize`, then React Native's
    `NativeModules`, then `Intl`
-2. Match each one against your `assets`, widening from the exact tag (`pt-BR`)
-   to the language subtag (`pt`) to any locale in the same language
+2. Match each one against your `assets`, widening from the normalized exact
+   tag (`pt_BR` → `pt-BR`), to the same script — explicit or inferred from
+   region (`zh-Hant-TW` / `zh-TW` → `zh-Hant`) — to a bare language
+   (`de-AT` → `de`), and finally to any locale in the same language
 3. If a match is found, use it as the initial locale
 4. Otherwise, fall back to `defaultLocale`
 
@@ -268,7 +273,8 @@ interface LoconProps extends PropsWithChildren {
 - **`currentLocale`**  
   Which locale to show:
 
-  - a **string** pins that locale and overrides auto-detection
+  - a **string** selects that locale and overrides auto-detection; if the prop
+    later changes, the provider follows the new value
   - **`null`** explicitly follows the device language
   - **omitted** leaves the locale uncontrolled after the initial detection
 
@@ -276,6 +282,11 @@ interface LoconProps extends PropsWithChildren {
   want: persist the user's choice as `string | null` and pass it straight
   through, and switching back to "System" re-detects immediately instead of
   waiting for a restart.
+
+  `currentLocale` is not a fully controlled React value: `setLocale()` can
+  still change the provider after the initial prop is applied. A later change
+  to the prop takes precedence again. This preserves the imperative API used
+  by existing apps.
 
 - **`defaultLocale`** (default `'en'`)  
   Used when key is missing in the current locale.
@@ -326,6 +337,7 @@ interface TranslateOptions {
   params?: Record<string, string | number>
   count?: number
   locale?: string
+  fallback?: string
 }
 ```
 
@@ -340,9 +352,15 @@ Unknown tokens are left as-is rather than blanked:
 l('saved_radius', { params: { m: 150 } }) // → '150 m radius · saved'
 ```
 
+**Fallback** — `fallback` is returned only when no locale resolves the input.
+`<LText assetKey='…'>children</LText>` uses this internally so a missing key
+shows its human-readable children rather than the raw key.
+
 **Plurals** — pass `count` and suffix your keys with the CLDR plural
 _category_, which is exactly what `Intl.PluralRules` returns for that locale.
 `{count}` is interpolated for free.
+When `params` also contains a `count` key, the dedicated `count` option wins so
+the rendered number always agrees with the selected plural form.
 
 ```json
 // en.json — two forms
@@ -375,14 +393,16 @@ interface LTextProps extends ComponentProps<typeof Text> {
 }
 ```
 
-- If `assetKey` is provided, `LText` uses it directly as the lookup key.
+- If `assetKey` is provided, `LText` uses it directly as the lookup key and
+  renders `children` when that key is missing in every fallback locale.
 - Otherwise, it uses `children` as an input to the same resolution logic
   as `l()`:
-  1. Try to find a key in the **project locale** whose **value** equals
-     `children`, then use that key in the current locale.
-  2. If nothing is found in the project locale, try **directly** using
-     `children` as a key in the current locale.
-  3. If still nothing is found, fall back to the **default locale**.
+  1. If `children` is a key in the target, default, or project locale, use it
+     directly (the backward-compatible key-based form).
+  2. Otherwise, find a key whose value equals `children`, first in the
+     **project locale**, then in the **default locale**.
+  3. Resolve that key in the target locale, then the default locale, then the
+     project locale.
   4. If there is no match anywhere, render `children` as-is.
 
 Fallback happens **per key**, not per locale: a string missing from the current
@@ -403,7 +423,7 @@ import tr from './assets/i18n/tr.json'
 const l = createTranslator({
   assets: { de, tr },
   locale: 'tr', // the document's language …
-  defaultLocale: 'en',
+  defaultLocale: 'de',
   projectLocale: 'de', // … regardless of what the UI is showing
 })
 
@@ -411,8 +431,87 @@ l('Arbeitszeit') // → 'Çalışma süresi'
 ```
 
 This is what lets an app export a report in a language the interface is not
-currently in — a user browsing in Turkish can still hand their employer a
-German timesheet.
+currently in — a user browsing in German can still produce a Turkish report.
+
+#### `resolveLocale()` — the provider's locale precedence
+
+`createTranslator()` needs a locale, and outside React nothing has picked one
+for you. `resolveLocale()` answers that question with the exact precedence
+`<Locon />` uses internally: an explicit choice, else the device language, else
+the default.
+
+```ts
+import { resolveLocale } from 'locon'
+import de from './assets/i18n/de.json'
+import en from './assets/i18n/en.json'
+
+const assets = { de, en }
+
+resolveLocale({ assets, currentLocale: 'de' }) // → 'de' — an explicit choice wins
+resolveLocale({ assets, currentLocale: null }) // → device language, else 'en'
+resolveLocale({ assets, autodetect: false, defaultLocale: 'de' }) // → 'de'
+```
+
+The config it takes:
+
+```ts
+interface ResolveLocaleConfig {
+  assets: Assets
+  /** An explicit choice, `null` to follow the device, `undefined` for neither. */
+  currentLocale?: string | null
+  defaultLocale?: string // default 'en'
+  autodetect?: boolean // default true
+  /** A device locale you already detected — pass it to skip a second detection pass. */
+  systemLocale?: string | null
+}
+```
+
+Reach for it in a background task, an export pipeline, or a native bridge —
+anywhere that has to agree with the UI about what language the app is in. An
+app that re-derives the rule by hand eventually disagrees with the provider.
+
+`getSystemLanguage(availableLocales)` is the detection step on its own. It
+returns the best match among the locales you ship, or `null`, trying
+`expo-localization`, then `react-native-localize`, then React Native's
+`NativeModules`, then `Intl` — skipping silently past whichever are not
+installed.
+
+```ts
+import { getSystemLanguage } from 'locon'
+
+getSystemLanguage(['de', 'en', 'pt-BR']) // device asks for pt → 'pt-BR'
+```
+
+Matching widens progressively — normalized exact tag, same script (explicit or
+inferred from a region), bare language, then any locale in the same language.
+Thus both `zh-Hant-TW` and `zh-TW` choose `zh-Hant`, not an earlier `zh-Hans`.
+Device order is preference order, so the user's first choice beats a closer
+match further down their list.
+
+#### `intlLocale()` — tags for `Intl`
+
+`locon` has no opinion on which calendar or numbering system your app should
+use: a Persian journal app wants Jalali dates, a Persian payroll export usually
+does not. That is a product decision. What it can do is get the tag syntax
+right, which naive concatenation does not — appending `-u-ca-gregory` to a
+locale that already reads `de-u-nu-latn` produces two `-u-` singletons, and
+`Intl` throws on it.
+
+```ts
+import { intlLocale } from 'locon'
+
+intlLocale('fa', { calendar: 'persian' }) // → 'fa-u-ca-persian'
+intlLocale('pt_BR') // → 'pt-BR'
+intlLocale('de-u-nu-latn', { calendar: 'gregory' }) // → 'de-u-nu-latn-ca-gregory'
+intlLocale('en-x-private', { calendar: 'gregory' }) // → 'en-u-ca-gregory-x-private'
+intlLocale('fa-u-ca-gregory', { calendar: 'persian' }) // → unchanged: the tag already decided
+intlLocale('de') // → 'de'
+
+new Intl.DateTimeFormat(intlLocale('fa', { calendar: 'persian' })).format(date)
+```
+
+Extensions already present in the tag are left alone, so an explicit choice by
+the caller — or by the user's own device settings — wins over your default.
 
 #### RTL
 
@@ -440,6 +539,10 @@ if (needsRestart) {
 }
 ```
 
+Calling it again with the current direction before restarting cancels a queued
+opposite change (for example, Arabic then English), so a dismissed language
+choice cannot leave the next launch in the wrong direction.
+
 On Expo, set `supportsRTL: true` in the `expo-localization` plugin config
 (see [Use with Expo](#use-with-expo)) or iOS will ignore the direction change.
 
@@ -458,10 +561,18 @@ against its code:
 node node_modules/locon/skills/locon-sync/scripts/check-locon-assets.mjs --source de
 ```
 
-It checks that every phrase in the code resolves, that all locales carry the
-same keys, that placeholders line up, that no locale has picked up characters
-from another script, and that nothing addresses a key where a source phrase
-belongs. It exits non-zero, so it works as a CI step.
+It checks that every statically written phrase in the code resolves, that all
+locales carry the same keys, that placeholders line up, that no locale has
+picked up characters from another script, and that nothing addresses a key
+where a source phrase belongs. It exits non-zero, so it works as a CI step.
+
+Orphaned keys are reported but are advisory by default: a lightweight source
+scan cannot prove that a dynamically selected string is unused. In a project
+that keeps lookups static, make them fatal too:
+
+```bash
+node node_modules/locon/skills/locon-sync/scripts/check-locon-assets.mjs --source de --strict-orphans
+```
 
 `write_locale.py` generates a locale file from the source locale, preserving
 key order and grouping and refusing to write anything that breaks an
@@ -513,12 +624,36 @@ raw text inside `<LText>`.
 
 The published package contains:
 
-- `dist/index.js` (CJS)
-- `dist/index.mjs` (ESM)
-- `dist/index.d.ts` (types)
+- `dist/index.js` — one bundled CommonJS file
+- `dist/index.d.ts` — types
 
-So you can import from `locon` in both JS and TS projects and get type
-support for `Locon`, `useLocon`, and `LText`.
+So you can import from `locon` in both JS and TS projects and get type support
+for every export. Public component/configuration types are importable too:
+
+```ts
+import type {
+  Assets,
+  IntlExtensions,
+  LTextProps,
+  LoconContextValue,
+  LoconProps,
+  ResolveLocaleConfig,
+  TranslateOptions,
+  Translator,
+  TranslatorConfig,
+} from 'locon'
+```
+
+The build is deliberately **CommonJS only, and bundled**. Metro finds optional
+dependencies by statically reading literal `require()` calls, and esbuild
+rewrites those into its own shim when emitting ESM — so an ESM build registered
+nothing and even `react-native` failed to resolve at runtime. Bundling matters
+for the same reason: an unbundled tree emitted extensionless relative imports,
+which Node resolves to `.js` but Metro tries `.mjs` for first, loading the
+library twice. Two instances mean two contexts — the provider fills one, every
+`useLocon()` reads the other, and consumers get untranslated screens with no
+error at all. Metro consumes CJS natively, so a second format buys a React
+Native library nothing.
 
 ---
 
