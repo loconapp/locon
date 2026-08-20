@@ -208,11 +208,7 @@ function LanguageSwitcher() {
 
   return (
     <View>
-      {/* Localised value by key */}
-      <Text>
-        {l('current_language')}: {currentLocale}
-      </Text>
-      {/* or by value in project- or default language */}
+      {/* Resolve by the value written in the project language. */}
       <Text>
         {l('Current language')}: {currentLocale}
       </Text>
@@ -349,7 +345,7 @@ Unknown tokens are left as-is rather than blanked:
 ```
 
 ```tsx
-l('saved_radius', { params: { m: 150 } }) // → '150 m radius · saved'
+l('{m} m radius · saved', { params: { m: 150 } }) // → '150 m radius · saved'
 ```
 
 **Fallback** — `fallback` is returned only when no locale resolves the input.
@@ -411,7 +407,7 @@ fallback when a locale-specific category is absent.
 ```
 
 ```tsx
-l('day', { count: 5 }) // en → '5 days' · ru → '5 дней'
+l('{count} days', { count: 5 }) // en → '5 days' · ru → '5 дней'
 ```
 
 There is deliberately no generic `_plural` suffix: most languages do not have
