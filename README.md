@@ -362,15 +362,37 @@ _category_, which is exactly what `Intl.PluralRules` returns for that locale.
 When `params` also contains a `count` key, the dedicated `count` option wins so
 the rendered number always agrees with the selected plural form.
 
+These are all six possible suffixes. The count examples are locale-specific,
+not universal rules:
+
+| Suffix   | Example selection                        | Example value    |
+| -------- | ---------------------------------------- | ---------------- |
+| `_zero`  | Arabic `0`                               | `"لا أيام"`      |
+| `_one`   | English `1`                              | `"{count} day"`  |
+| `_two`   | Arabic `2`                               | `"يومان"`        |
+| `_few`   | Russian `2–4`, except `12–14`            | `"{count} дня"`  |
+| `_many`  | Russian `0`, `5–20`, `25–30`, and so on  | `"{count} дней"` |
+| `_other` | English `0` and `2+`; decimals; fallback | `"{count} days"` |
+
+Always provide `_other`. It is CLDR's catch-all category and Locon's first
+fallback when a locale-specific category is absent.
+
 ```json
 // en.json — two forms
 { "day_one": "{count} day", "day_other": "{count} days" }
 
-// ru.json — three
-{ "day_one": "{count} день", "day_few": "{count} дня", "day_many": "{count} дней" }
+// ru.json — four categories (three for integers, plus _other for decimals)
+{ "day_one": "{count} день", "day_few": "{count} дня", "day_many": "{count} дней", "day_other": "{count} дня" }
 
-// ar.json — up to six
-{ "day_zero": "…", "day_one": "…", "day_two": "…", "day_few": "…", "day_many": "…", "day_other": "…" }
+// ar.json — all six
+{
+  "day_zero": "لا أيام",
+  "day_one": "يوم واحد",
+  "day_two": "يومان",
+  "day_few": "{count} أيام",
+  "day_many": "{count} يومًا",
+  "day_other": "{count} يوم"
+}
 ```
 
 ```tsx
@@ -378,8 +400,7 @@ l('day', { count: 5 }) // en → '5 days' · ru → '5 дней'
 ```
 
 There is deliberately no generic `_plural` suffix: most languages do not have
-a single plural form. Categories fall back to `_other`, then to the bare key,
-so a locale only needs the forms it actually inflects.
+a single plural form. Categories fall back to `_other`, then to the bare key.
 
 #### `<LText />`
 
