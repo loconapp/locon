@@ -643,6 +643,8 @@ skills directory) and it will follow the same workflow, including the parts
 that are not about strings at all — fonts for new scripts, calendars and
 numbering systems, RTL, and store metadata.
 
+#### Use the skill with Claude Code or Codex
+
 Claude Code and Codex both use the open Agent Skills format but scan different
 project directories. Keep one canonical npm copy and expose it to both from
 the app root:
@@ -653,9 +655,60 @@ ln -s ../../node_modules/locon/skills/locon-sync .claude/skills/locon-sync
 ln -s ../../node_modules/locon/skills/locon-sync .agents/skills/locon-sync
 ```
 
-Claude can then invoke `/locon-sync`; Codex can invoke `$locon-sync`. Both may
-also load it automatically when a localization task matches its description.
-Copy the folder instead on systems where project symlinks are unavailable.
+Commit these two links so everyone opening the repository gets the same skill.
+If the commands do not appear in an already open session, reopen the project.
+Copy the folder instead on systems where project symlinks are unavailable, and
+refresh both copies whenever `locon` is updated.
+
+Invoke the skill explicitly at the beginning of a chat message. Claude Code
+uses `/locon-sync`; Codex uses `$locon-sync`. The rest of the message is the
+task and any limits you want the agent to observe.
+
+Audit without changing files:
+
+```text
+# Claude Code
+/locon-sync Audit every declared locale in this project. Do not change files; report missing assets, unresolved strings, placeholder or plural problems, and integration gaps.
+
+# Codex
+$locon-sync Audit every declared locale in this project. Do not change files; report missing assets, unresolved strings, placeholder or plural problems, and integration gaps.
+```
+
+Synchronize existing languages after UI copy changes:
+
+```text
+# Claude Code
+/locon-sync Synchronize all existing locales after my source-language UI changes. Preserve product meaning, run the bundled checker and relevant tests, and list anything that needs my decision.
+
+# Codex
+$locon-sync Synchronize all existing locales after my source-language UI changes. Preserve product meaning, run the bundled checker and relevant tests, and list anything that needs my decision.
+```
+
+Add a language end to end:
+
+```text
+# Claude Code
+/locon-sync Add Polish (pl) to this app. Inspect the project before editing, translate every source asset, update the declared language list and picker, check fonts, RTL, Intl and native/store metadata, then run validation. Do not publish.
+
+# Codex
+$locon-sync Add Polish (pl) to this app. Inspect the project before editing, translate every source asset, update the declared language list and picker, check fonts, RTL, Intl and native/store metadata, then run validation. Do not publish.
+```
+
+Both tools can also select the skill automatically from a plain request such
+as “audit the Locon translations” because its description declares those
+tasks. The explicit command is useful when you want to guarantee that the
+workflow and bundled scripts are loaded. You can inspect the available skills
+with `/skills` in either tool. See the official
+[Claude Code skills documentation](https://code.claude.com/docs/en/slash-commands)
+and [Codex skills documentation](https://learn.chatgpt.com/docs/build-skills).
+
+The agent first discovers the source locale, asset directory, and complete
+declared language list. It then runs the checker, makes only the requested
+changes, uses the safe writer when generating a locale, and verifies JSON,
+placeholders, plurals, scripts, fonts, RTL, locale-sensitive formatting, and
+native/store declarations. A skill supplies a workflow, not extra permissions:
+publishing, pushing, or destructive changes still require the authority you
+give the agent in the chat.
 
 ---
 
