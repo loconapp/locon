@@ -7,6 +7,7 @@
  */
 import type Assets from '../types/Assets'
 import type TranslateOptions from '../types/TranslateOptions'
+import pluralCategory from './pluralCategory'
 
 interface TranslatorConfig {
   assets: Assets
@@ -84,17 +85,6 @@ function interpolate(value: string, params?: Record<string, string | number>): s
  * the plural form is chosen.
  */
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/
-
-/** CLDR plural category for `count`, e.g. `one` / `few` / `many` / `other`. */
-function pluralCategory(count: number, locale: string): string {
-  try {
-    return new Intl.PluralRules(locale.replace(/_/g, '-')).select(count)
-  } catch {
-    // Locale unknown to Intl (or Intl absent): English-ish rule is a safer
-    // guess than crashing a render.
-    return count === 1 ? 'one' : 'other'
-  }
-}
 
 function createTranslator({ assets, locale, defaultLocale = 'en', projectLocale }: TranslatorConfig): Translator {
   const resolvedProjectLocale = projectLocale || defaultLocale
