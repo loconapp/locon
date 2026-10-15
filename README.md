@@ -6,9 +6,19 @@
 
 [Website](https://locon.dev) · [npm](https://www.npmjs.com/package/locon) · [GitHub](https://github.com/loconapp/locon)
 
-`locon` is a small, typed i18n helper for React Native.  
-It provides a context provider, a hook, and a simple text component to keep
-your translations flat, explicit, and easy to use.
+`locon` is a small, typed localization library for **React Native, React and Node**.
+Keep flat JSON resources, translate with interpolation and CLDR plurals, and
+load browser languages only when they are selected.
+
+| Runtime | Import | Resources |
+| --- | --- | --- |
+| React Native / Expo | `locon` | Existing provider, hook and `<LText>` API |
+| React web (React 19+) | `locon/react` | Async loaders, provider and reactive hook |
+| Node / plain TypeScript | `locon/core` | Standalone translator and lazy resource store |
+
+**New in 1.6:** platform-specific entries and lazy resources. See
+[React (web), Node and lazy resources](#react-web-node-and-lazy-resources).
+The existing React Native entry remains compatible.
 
 Basic usage: use `<LText>` instead of `<Text>`. Put plain text in your project language (or the default language) inside and it will be localized automatically.
 
@@ -24,7 +34,9 @@ function Example() {
 
 ### Features
 
-- **React Native–first**: tiny API, no global singletons
+- **React Native–first**: existing native API, plus independent React web and Node entries
+- **Lazy locale resources** for web: load the selected language, cache successful loads, deduplicate parallel requests
+- **Safe async switching**: the last selection wins; a failed load preserves the current language
 - **Expo-ready**: detects the device language through `expo-localization`, no native linking
 - **Context provider** with pluggable assets (per-locale JSON)
 - **Device language auto-detection** (optional)
@@ -54,7 +66,13 @@ yarn add locon
 bun add locon
 ```
 
-**Peer dependencies**
+**Peer dependencies by entry**
+
+`locon/core` requires neither React nor React Native. `locon/react` requires
+React 19+; add `react-dom` to your web application as usual. The package marks
+React and React Native peers optional so Node users do not install them.
+
+For the existing React Native entry, your app supplies:
 
 - `react >= 19.0.0`
 - `react-native >= 0.70.0`
@@ -448,7 +466,7 @@ no React tree: generating a PDF or spreadsheet, composing an e-mail, or
 building a notification from a background task.
 
 ```ts
-import { createTranslator } from 'locon'
+import { createTranslator } from 'locon/core'
 import de from './assets/i18n/de.json'
 import tr from './assets/i18n/tr.json'
 
@@ -465,9 +483,13 @@ l('Arbeitszeit') // → 'Çalışma süresi'
 This is what lets an app export a report in a language the interface is not
 currently in — a user browsing in German can still produce a Turkish report.
 
-#### `resolveLocale()` — the provider's locale precedence
+#### `resolveLocale()` — the native provider's locale precedence
 
-`createTranslator()` needs a locale, and outside React nothing has picked one
+`resolveLocale()` is a helper for the native entry. In Node and React web, use
+`matchLocale(preferences, supportedLocales, defaultLocale)` from `locon/core`
+instead, or pass `languages` to `createLocon`.
+
+`createTranslator()` needs a locale, and outside a provider nothing has picked one
 for you. `resolveLocale()` answers that question with the exact precedence
 `<Locon />` uses internally: an explicit choice, else the device language, else
 the default.
@@ -745,8 +767,13 @@ raw text inside `<LText>`.
 
 The published package contains:
 
-- `dist/index.js` — one bundled CommonJS file
-- `dist/index.d.ts` — types
+- `dist/index.js`, `dist/index.d.ts` — the existing bundled CommonJS native entry
+- `dist/react.js`, `dist/react.mjs`, and declarations — React web, CommonJS and ESM
+- `dist/core.js`, `dist/core.mjs`, and declarations — Node/plain TypeScript, CommonJS and ESM
+
+Use package entry names (`locon`, `locon/react`, `locon/core`) instead of importing
+`dist` files directly. The entry-specific exports keep native dependencies out
+of browser and server bundles.
 
 So you can import from `locon` in both JS and TS projects and get type support
 for every export. Public component/configuration types are importable too:
@@ -765,7 +792,7 @@ import type {
 } from 'locon'
 ```
 
-The build is deliberately **CommonJS only, and bundled**. Metro finds optional
+The **React Native entry** is deliberately CommonJS only and bundled. Metro finds optional
 dependencies by statically reading literal `require()` calls, and esbuild
 rewrites those into its own shim when emitting ESM — so an ESM build registered
 nothing and even `react-native` failed to resolve at runtime. Bundling matters
@@ -773,10 +800,48 @@ for the same reason: an unbundled tree emitted extensionless relative imports,
 which Node resolves to `.js` but Metro tries `.mjs` for first, loading the
 library twice. Two instances mean two contexts — the provider fills one, every
 `useLocon()` reads the other, and consumers get untranslated screens with no
-error at all. Metro consumes CJS natively, so a second format buys a React
-Native library nothing.
+error at all. Metro consumes CJS natively. React web and Node have their own
+independent ESM/CommonJS entries.
 
 ---
+
+### React (web), Node and lazy resources
+
+The existing `locon` entry remains the React Native API. Use `locon/react` in
+React web apps and `locon/core` in Node. These entries never import React Native;
+`locon/core` does not import React either. React 19+ is required by the adapter.
+
+```tsx
+import { createLocon, LoconProvider, useLocon } from 'locon/react'
+
+const i18n = createLocon({
+  defaultLocale: 'en',
+  languages: navigator.languages,
+  loaders: {
+    en: () => import('./locales/en.json'),
+    de: () => import('./locales/de.json'),
+  },
+})
+await i18n.setLocale(null) // load just the browser language, before mounting
+// <LoconProvider instance={i18n}><App /></LoconProvider>
+// const { l, currentLocale, loading, error, setLocale } = useLocon()
+// await setLocale('de') // fetch once; successful resources stay cached
+```
+
+`setLocale` resolves `true` when that selection was applied, `false` when a later
+selection won. Failed loads reject, preserve the displayed language and can be
+retried. Parallel loads are deduplicated. Catch rejections in event handlers and
+offer a retry. Local storage and document `lang` remain application decisions.
+Only already loaded resources participate in per-key fallback: the store never
+silently downloads every fallback language. Prefer stable translation keys in
+lazy apps; source-phrase reverse lookup needs the source resources loaded.
+
+In Node, create an instance per request, pass the request's language preferences
+explicitly, and await `setLocale` before rendering. For resources already loaded
+in memory, use `createTranslator({ assets, locale })` from `locon/core` directly.
+On SSR, use a separate instance per request and hydrate with the same preloaded
+resources/locale; never share a mutable locale store between requests.
+
 
 ### License
 

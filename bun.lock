@@ -36,6 +36,8 @@
       },
       "optionalPeers": [
         "expo-localization",
+        "react",
+        "react-native",
         "react-native-localize",
       ],
     },

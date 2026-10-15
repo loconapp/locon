@@ -1,0 +1,7 @@
+export { default as createTranslator } from '../locon/utils/createTranslator'
+export type { Translator, TranslatorConfig } from '../locon/utils/createTranslator'
+export type { default as Assets } from '../locon/types/Assets'
+export type { default as TranslateOptions } from '../locon/types/TranslateOptions'
+export { default as intlLocale } from '../locon/utils/intlLocale'
+export { createLocon, matchLocale } from './resources'
+export type { LoconInstance, ResourceOptions, ResourceLoader, LocaleSnapshot } from './resources'

@@ -1,7 +1,7 @@
 {
   "name": "locon",
-  "version": "1.5.1",
-  "description": "locon is a simple and lightweight library for React Native that provides a simple way to manage translations in your app.",
+  "version": "1.6.0",
+  "description": "Lightweight localization for React Native, React and Node with lazy locale resources.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -10,17 +10,28 @@
       "default": "./dist/index.js"
     },
     "./skills/*": "./skills/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.mjs",
+      "require": "./dist/core.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
+    }
   },
   "files": [
     "dist",
-    "skills"
+    "skills",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsup --config tsup.web.config.ts",
     "lint": "eslint src",
-    "prepare": "tsup",
-    "pretest": "tsup",
+    "prepare": "npm run build",
+    "pretest": "npm run build",
     "test": "jest"
   },
   "keywords": [
@@ -58,6 +69,12 @@
       "optional": true
     },
     "react-native-localize": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-native": {
       "optional": true
     }
   },
