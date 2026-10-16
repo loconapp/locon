@@ -1,6 +1,6 @@
 {
   "name": "locon",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Lightweight localization for React Native, React and Node with lazy locale resources.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

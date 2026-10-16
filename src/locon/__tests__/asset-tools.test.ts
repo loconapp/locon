@@ -105,6 +105,32 @@ describe('shipped asset tools', () => {
     expect(result.stdout).toContain('✓ assets and code agree')
   })
 
+  it('audits web L text, multiline children and static expressions with placeholders', () => {
+    const root = temporaryProject()
+    writeJson(join(root, 'assets/de.json'), { hello: 'Hallo', multiline: 'Guten Morgen', named: 'Hallo {name}' })
+    writeJson(join(root, 'assets/en.json'), { hello: 'Hello', multiline: 'Good morning', named: 'Hello {name}' })
+    writeFileSync(join(root, 'src/example.tsx'), [
+      '<button><L>Hallo</L></button>',
+      '<L>\n  Guten\n  Morgen\n</L>',
+      '<L params={{ name }}>\n  {"Hallo {name}"}\n</L>',
+    ].join('\n'))
+    const result = runChecker(root, { strictOrphans: true })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('✓ assets and code agree')
+  })
+
+  it('rejects unknown web L phrases, including literal-expression children', () => {
+    const root = temporaryProject()
+    writeJson(join(root, 'assets/de.json'), { hello: 'Hallo' })
+    writeJson(join(root, 'assets/en.json'), { hello: 'Hello' })
+    writeFileSync(join(root, 'src/example.tsx'), '<L>Hllo</L>\n<L>{"Noch unbekannt"}</L>')
+    const result = runChecker(root)
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('unresolved phrase')
+    expect(result.stdout).toContain('Hllo')
+    expect(result.stdout).toContain('Noch unbekannt')
+  })
+
   it('reports orphans by default and makes them fatal on request', () => {
     const root = temporaryProject()
     writeJson(join(root, 'assets/de.json'), { used: 'Benutzt', orphan: 'Verwaist' })

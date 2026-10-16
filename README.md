@@ -16,7 +16,7 @@ load browser languages only when they are selected.
 | React web (React 19+) | `locon/react` | Async loaders, provider and reactive hook |
 | Node / plain TypeScript | `locon/core` | Standalone translator and lazy resource store |
 
-**New in 1.6:** platform-specific entries and lazy resources. See
+**New in 1.6.1:** the React web `<L>` component. Version 1.6 introduced platform-specific entries and lazy resources. See
 [React (web), Node and lazy resources](#react-web-node-and-lazy-resources).
 The existing React Native entry remains compatible.
 
@@ -833,8 +833,46 @@ selection won. Failed loads reject, preserve the displayed language and can be
 retried. Parallel loads are deduplicated. Catch rejections in event handlers and
 offer a retry. Local storage and document `lang` remain application decisions.
 Only already loaded resources participate in per-key fallback: the store never
-silently downloads every fallback language. Prefer stable translation keys in
-lazy apps; source-phrase reverse lookup needs the source resources loaded.
+silently downloads every fallback language. Write source-language text in code.
+For lazy apps, use the source phrases as JSON keys so translating them does not
+require downloading the source locale first:
+
+```json
+// en.json
+{ "Überraschung öffnen": "Open your surprise" }
+```
+
+```json
+// de.json
+{ "Überraschung öffnen": "Überraschung öffnen" }
+```
+
+Set `projectLocale: 'de'` for German source strings. Reverse lookup against
+separate technical keys still needs the source resource loaded.
+
+#### Localized React text (`L`, 1.6.1+)
+
+```tsx
+import { L, useLocon } from 'locon/react'
+
+function Card({ name }: { name: string }) {
+  const { l } = useLocon()
+  return <>
+    <button><L>Überraschung öffnen</L></button>
+    <h2><L params={{ name }}>{'Buh, {name}!'}</L></h2>
+    <input placeholder={l('Name eingeben')} />
+  </>
+}
+```
+
+`L` renders a text fragment without a wrapping span. Use it inside HTML or SVG
+text elements. It updates when the provider's locale changes. Pass one source
+string as children; put dynamic values in `params` instead of JSX concatenation
+or nested markup. `count`, `locale`, and `fallback` have the same meaning as in
+`l()`. An optional `assetKey` can disambiguate identical source phrases; missing
+translations fall back to the children unless `fallback` is explicitly set.
+Keep `l()` for string props, document metadata, and other non-rendered values.
+The existing React Native `LText` API is unchanged.
 
 In Node, create an instance per request, pass the request's language preferences
 explicitly, and await `setLocale` before rendering. For resources already loaded

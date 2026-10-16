@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.1
+
+### Added
+
+- `L` and `LProps` from `locon/react`: localized source-language text without
+  extra DOM elements, including use inside SVG `<text>`.
+- `L` supports interpolation, CLDR plurals, per-call locale overrides, fallback,
+  and optional `assetKey` disambiguation. React escapes the translated text.
+- The asset checker recognizes `<L>` alongside `<LText>`, including static
+  string-expression children used with placeholders.
+
+### Documentation
+
+- Source-phrase examples for React web and Node; phrase-indexed JSON examples
+  preserve lazy loading without preloading the source locale.
+- Updated website examples and release instructions for 1.6.1.
+
 ## 1.6.0
 
 ### Added

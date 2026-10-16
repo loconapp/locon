@@ -7,7 +7,7 @@
  * language to someone who cannot read it. Nothing else in a typical toolchain
  * catches that, or any of the other failure modes below.
  *
- *   1. every phrase passed to `l()` / `<LText>` resolves
+ *   1. every phrase passed to `l()` / `<LText>` / `<L>` resolves
  *   2. every locale has exactly the keys the source locale has
  *   3. placeholders match (with a documented exception for plurals)
  *   4. no unreachable duplicate values
@@ -376,23 +376,32 @@ for (const file of files) {
     if (literal) used.push({ phrase: literal.value, file })
   }
 
-  for (const match of executable.matchAll(/<LText\b([^>]*)>([\s\S]*?)<\/LText>/g)) {
+  for (const match of executable.matchAll(/<(LText|L)\b([^>]*)>([\s\S]*?)<\/\1>/g)) {
+    const tag = match[1]
     const openingTagEnd = match[0].indexOf('>')
-    const attributes = code.slice(match.index + '<LText'.length, match.index + openingTagEnd)
+    const attributes = code.slice(match.index + tag.length + 1, match.index + openingTagEnd)
     const childStart = match.index + openingTagEnd + 1
-    const childEnd = match.index + match[0].length - '</LText>'.length
+    const childEnd = match.index + match[0].length - tag.length - 3
     const child = code.slice(childStart, childEnd)
     const assetKey = attributeLiteral(attributes, 'assetKey')
 
     if (assetKey) {
       used.push({ phrase: assetKey, file, directKey: true })
-    } else if (!/[<>{}]/.test(match[2])) {
+    } else if (!/[<>{}]/.test(child)) {
       used.push({ phrase: collapse(child), file })
+    } else {
+      // A single literal expression preserves placeholders: <L>{'Hi {name}'}</L>.
+      const expression = child.trim()
+      if (expression.startsWith('{') && expression.endsWith('}')) {
+        const contents = expression.slice(1, -1).trim()
+        const literal = readLiteralAt(contents, 0)
+        if (literal && !contents.slice(literal.end).trim()) used.push({ phrase: literal.value, file })
+      }
     }
   }
 
-  for (const match of executable.matchAll(/<LText\b([^>]*)\/>/g)) {
-    const attributes = code.slice(match.index + '<LText'.length, match.index + match[0].length - 2)
+  for (const match of executable.matchAll(/<(LText|L)\b([^>]*)\/>/g)) {
+    const attributes = code.slice(match.index + match[1].length + 1, match.index + match[0].length - 2)
     const assetKey = attributeLiteral(attributes, 'assetKey')
     if (assetKey) used.push({ phrase: assetKey, file, directKey: true })
   }

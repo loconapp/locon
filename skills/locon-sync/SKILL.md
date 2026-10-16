@@ -36,7 +36,7 @@ node "$LOCON_SYNC_SKILL_DIR/scripts/check-locon-assets.mjs" \
 ```
 
 This scans static strings in JavaScript/TypeScript (single, double, or template
-quotes), `lIn()` calls and `LText` children/`assetKey` props. It ignores calls
+quotes), `lIn()` calls and `LText` / `L` children and `assetKey` props. It ignores calls
 inside comments and string examples. Orphaned keys and plural categories that
 currently fall back to `_other` are advisory because static analysis cannot
 prove either is wrong. Enforce them in CI with `--strict-orphans` and
@@ -128,6 +128,19 @@ Two mechanical rules:
 When extracting phrases from source, remember **JSX collapses whitespace**: a
 multi-line `<LText>` child becomes one space-joined string at runtime, so the
 asset value must match the collapsed form.
+
+For React web (locon 1.6.1+), use `L` from `locon/react` for text children:
+
+```tsx
+<button><L>Überraschung öffnen</L></button>
+<h2><L params={{ name }}>{'Buh, {name}!'}</L></h2>
+<input placeholder={l('Name eingeben')} />
+```
+
+`L` adds no DOM element and works inside SVG `<text>`. Pass one source string,
+not nested markup or interpolated JSX children. Use `l()` for string props,
+metadata, and other non-rendered values. Use source phrases as resource keys
+when lazy loading must work without loading the source locale first.
 
 ## 5. Beyond the strings
 
